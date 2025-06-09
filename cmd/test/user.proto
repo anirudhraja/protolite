@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package example;
+
+// User message with nested Profile and Post
+message User {
+  int32 id = 1;
+  string name = 2;
+  string email = 3;
+  UserProfile profile = 4;
+  Post latest_post = 5;
+}
+
+// User profile information
+message UserProfile {
+  string bio = 1;
+  string avatar_url = 2;
+}
+
+// Blog post message
+message Post {
+  int64 id = 1;
+  string title = 2;
+  string content = 3;
+  bool published = 4;
+} 
