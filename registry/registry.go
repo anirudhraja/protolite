@@ -206,13 +206,59 @@ func (r *Registry) registerNestedNames(pkg, parentName string, msg *schema.Messa
 
 // buildDefinitions builds the complete definitions (placeholder for now)
 func (r *Registry) buildDefinitions(protoFile *schema.ProtoFile) error {
-	// TODO: Validate field types, resolve references, etc.
+	// Validate field types and resolve references
+	for _, message := range protoFile.Messages {
+		if err := r.resolveMessageFields(message, protoFile.Package); err != nil {
+			return fmt.Errorf("failed to resolve fields in message %s: %w", message.Name, err)
+		}
+	}
 	return nil
 }
 
 // buildServices builds service definitions (placeholder for now)
 func (r *Registry) buildServices(protoFile *schema.ProtoFile) error {
-	// TODO: Build service method handlers
+	// Validate service method input/output types
+	for _, service := range protoFile.Services {
+		for _, method := range service.Methods {
+			// Check if input type exists
+			if _, err := r.GetMessage(method.InputType); err != nil {
+				return fmt.Errorf("service %s method %s: input type %s not found",
+					service.Name, method.Name, method.InputType)
+			}
+
+			// Check if output type exists
+			if _, err := r.GetMessage(method.OutputType); err != nil {
+				return fmt.Errorf("service %s method %s: output type %s not found",
+					service.Name, method.Name, method.OutputType)
+			}
+		}
+	}
+	return nil
+}
+
+// resolveMessageFields resolves field type references within a message
+func (r *Registry) resolveMessageFields(message *schema.Message, packageName string) error {
+	for _, field := range message.Fields {
+		// Resolve message and enum type references
+		if field.Type.Kind == schema.KindMessage {
+			if _, err := r.GetMessage(field.Type.MessageType); err != nil {
+				return fmt.Errorf("field %s references unknown message type %s", field.Name, field.Type.MessageType)
+			}
+		}
+		if field.Type.Kind == schema.KindEnum {
+			if _, err := r.GetEnum(field.Type.EnumType); err != nil {
+				return fmt.Errorf("field %s references unknown enum type %s", field.Name, field.Type.EnumType)
+			}
+		}
+	}
+
+	// Recursively process nested messages
+	for _, nestedMsg := range message.NestedTypes {
+		if err := r.resolveMessageFields(nestedMsg, packageName); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

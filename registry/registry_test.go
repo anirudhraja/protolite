@@ -617,3 +617,331 @@ func containsMiddle(s, substr string) bool {
 	}
 	return false
 }
+
+func TestBuildDefinitions_Success(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+	registry.enums = make(map[string]*schema.Enum)
+
+	// Add some test messages and enums to the registry
+	testMessage := &schema.Message{Name: "TestMessage"}
+	testEnum := &schema.Enum{Name: "TestEnum"}
+	registry.messages["test.pkg.TestMessage"] = testMessage
+	registry.enums["test.pkg.TestEnum"] = testEnum
+
+	protoFile := &schema.ProtoFile{
+		Package: "test.pkg",
+		Messages: []*schema.Message{
+			{
+				Name: "Message1",
+				Fields: []*schema.Field{
+					{
+						Name:   "field1",
+						Number: 1,
+						Type: schema.FieldType{
+							Kind:        schema.KindMessage,
+							MessageType: "TestMessage",
+						},
+					},
+					{
+						Name:   "field2",
+						Number: 2,
+						Type: schema.FieldType{
+							Kind:     schema.KindEnum,
+							EnumType: "TestEnum",
+						},
+					},
+				},
+			},
+		},
+		Enums: []*schema.Enum{
+			{Name: "TestEnum"},
+		},
+	}
+
+	err := registry.buildDefinitions(protoFile)
+	if err != nil {
+		t.Errorf("buildDefinitions failed: %v", err)
+	}
+}
+
+func TestBuildDefinitions_InvalidMessageType(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+	registry.enums = make(map[string]*schema.Enum)
+
+	protoFile := &schema.ProtoFile{
+		Package: "test.pkg",
+		Messages: []*schema.Message{
+			{
+				Name: "Message1",
+				Fields: []*schema.Field{
+					{
+						Name:   "field1",
+						Number: 1,
+						Type: schema.FieldType{
+							Kind:        schema.KindMessage,
+							MessageType: "NonExistentMessage",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := registry.buildDefinitions(protoFile)
+	if err == nil {
+		t.Error("Expected error for invalid message type")
+	}
+
+	if !contains(err.Error(), "unknown message type") {
+		t.Errorf("Expected 'unknown message type' error, got: %v", err)
+	}
+}
+
+func TestBuildDefinitions_InvalidEnumType(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+	registry.enums = make(map[string]*schema.Enum)
+
+	protoFile := &schema.ProtoFile{
+		Package: "test.pkg",
+		Messages: []*schema.Message{
+			{
+				Name: "Message1",
+				Fields: []*schema.Field{
+					{
+						Name:   "field1",
+						Number: 1,
+						Type: schema.FieldType{
+							Kind:     schema.KindEnum,
+							EnumType: "NonExistentEnum",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := registry.buildDefinitions(protoFile)
+	if err == nil {
+		t.Error("Expected error for invalid enum type")
+	}
+
+	if !contains(err.Error(), "unknown enum type") {
+		t.Errorf("Expected 'unknown enum type' error, got: %v", err)
+	}
+}
+
+func TestBuildDefinitions_NestedMessages(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+	registry.enums = make(map[string]*schema.Enum)
+
+	// Add a test message to reference
+	testMessage := &schema.Message{Name: "TestMessage"}
+	registry.messages["test.pkg.TestMessage"] = testMessage
+
+	protoFile := &schema.ProtoFile{
+		Package: "test.pkg",
+		Messages: []*schema.Message{
+			{
+				Name: "Message1",
+				NestedTypes: []*schema.Message{
+					{
+						Name: "NestedMessage",
+						Fields: []*schema.Field{
+							{
+								Name:   "field1",
+								Number: 1,
+								Type: schema.FieldType{
+									Kind:        schema.KindMessage,
+									MessageType: "TestMessage",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := registry.buildDefinitions(protoFile)
+	if err != nil {
+		t.Errorf("buildDefinitions failed for nested messages: %v", err)
+	}
+}
+
+func TestBuildServices_Success(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+
+	// Add test messages for input/output types
+	inputMessage := &schema.Message{Name: "InputMessage"}
+	outputMessage := &schema.Message{Name: "OutputMessage"}
+	registry.messages["test.pkg.InputMessage"] = inputMessage
+	registry.messages["test.pkg.OutputMessage"] = outputMessage
+
+	protoFile := &schema.ProtoFile{
+		Package: "test.pkg",
+		Services: []*schema.Service{
+			{
+				Name: "TestService",
+				Methods: []*schema.Method{
+					{
+						Name:       "TestMethod",
+						InputType:  "InputMessage",
+						OutputType: "OutputMessage",
+					},
+				},
+			},
+		},
+	}
+
+	err := registry.buildServices(protoFile)
+	if err != nil {
+		t.Errorf("buildServices failed: %v", err)
+	}
+}
+
+func TestBuildServices_InvalidInputType(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+
+	// Add only output message, missing input message
+	outputMessage := &schema.Message{Name: "OutputMessage"}
+	registry.messages["test.pkg.OutputMessage"] = outputMessage
+
+	protoFile := &schema.ProtoFile{
+		Package: "test.pkg",
+		Services: []*schema.Service{
+			{
+				Name: "TestService",
+				Methods: []*schema.Method{
+					{
+						Name:       "TestMethod",
+						InputType:  "NonExistentInput",
+						OutputType: "OutputMessage",
+					},
+				},
+			},
+		},
+	}
+
+	err := registry.buildServices(protoFile)
+	if err == nil {
+		t.Error("Expected error for invalid input type")
+	}
+
+	if !contains(err.Error(), "input type") && !contains(err.Error(), "not found") {
+		t.Errorf("Expected input type error, got: %v", err)
+	}
+}
+
+func TestBuildServices_InvalidOutputType(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+
+	// Add only input message, missing output message
+	inputMessage := &schema.Message{Name: "InputMessage"}
+	registry.messages["test.pkg.InputMessage"] = inputMessage
+
+	protoFile := &schema.ProtoFile{
+		Package: "test.pkg",
+		Services: []*schema.Service{
+			{
+				Name: "TestService",
+				Methods: []*schema.Method{
+					{
+						Name:       "TestMethod",
+						InputType:  "InputMessage",
+						OutputType: "NonExistentOutput",
+					},
+				},
+			},
+		},
+	}
+
+	err := registry.buildServices(protoFile)
+	if err == nil {
+		t.Error("Expected error for invalid output type")
+	}
+
+	if !contains(err.Error(), "output type") && !contains(err.Error(), "not found") {
+		t.Errorf("Expected output type error, got: %v", err)
+	}
+}
+
+func TestBuildServices_MultipleServices(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+
+	// Add test messages
+	inputMessage := &schema.Message{Name: "InputMessage"}
+	outputMessage := &schema.Message{Name: "OutputMessage"}
+	registry.messages["test.pkg.InputMessage"] = inputMessage
+	registry.messages["test.pkg.OutputMessage"] = outputMessage
+
+	protoFile := &schema.ProtoFile{
+		Package: "test.pkg",
+		Services: []*schema.Service{
+			{
+				Name: "Service1",
+				Methods: []*schema.Method{
+					{
+						Name:       "Method1",
+						InputType:  "InputMessage",
+						OutputType: "OutputMessage",
+					},
+				},
+			},
+			{
+				Name: "Service2",
+				Methods: []*schema.Method{
+					{
+						Name:       "Method2",
+						InputType:  "InputMessage",
+						OutputType: "OutputMessage",
+					},
+				},
+			},
+		},
+	}
+
+	err := registry.buildServices(protoFile)
+	if err != nil {
+		t.Errorf("buildServices failed for multiple services: %v", err)
+	}
+}
+
+func TestResolveMessageFields_PrimitiveTypes(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+
+	message := &schema.Message{
+		Name: "TestMessage",
+		Fields: []*schema.Field{
+			{
+				Name:   "stringField",
+				Number: 1,
+				Type: schema.FieldType{
+					Kind:          schema.KindPrimitive,
+					PrimitiveType: schema.TypeString,
+				},
+			},
+			{
+				Name:   "intField",
+				Number: 2,
+				Type: schema.FieldType{
+					Kind:          schema.KindPrimitive,
+					PrimitiveType: schema.TypeInt32,
+				},
+			},
+		},
+	}
+
+	err := registry.resolveMessageFields(message, "test.pkg")
+	if err != nil {
+		t.Errorf("resolveMessageFields failed for primitive types: %v", err)
+	}
+}
