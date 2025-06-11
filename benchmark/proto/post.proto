@@ -1,0 +1,267 @@
+syntax = "proto3";
+
+package benchmark;
+
+option go_package = "github.com/protolite/benchmark/generated";
+
+// Comprehensive Post message demonstrating all protobuf features  
+message Post {
+  int32 id = 1;
+  string title = 2;
+  int32 author_id = 3;
+  PostStatus status = 4;
+  repeated string tags = 5;
+  int64 created_at = 6;
+  int64 updated_at = 7;
+  int32 view_count = 8;
+  bool featured = 9;
+  ContentRating rating = 10;
+  repeated ContentFlag flags = 11;
+
+  // oneof content - demonstrates different content types
+  oneof content {
+    TextContent text_content = 12;
+    VideoContent video_content = 13;
+    ImageContent image_content = 14;
+    LinkContent link_content = 15;
+  }
+
+  // Multiple map types with different key/value combinations
+  map<string, PostMetric> metrics = 16;        // map<string, PostMetric>
+  map<int32, string> revisions = 17;           // map<int32, string>
+  map<string, double> analytics = 18;          // map<string, double>
+  map<string, CategoryInfo> categories = 19;   // map<string, CategoryInfo>
+
+  // Nested repeated comments with recursive structure
+  repeated Comment comments = 20;
+
+  // Post metadata with nested structures
+  PostMetadata metadata = 21;
+}
+
+// Content types for oneof
+message TextContent {
+  string body = 1;
+  TextFormat format = 2;
+  int32 word_count = 3;
+  repeated string footnotes = 4;
+}
+
+message VideoContent {
+  string video_url = 1;
+  string thumbnail_url = 2;
+  int32 duration_seconds = 3;
+  VideoQuality quality = 4;
+  repeated string subtitles = 5;
+}
+
+message ImageContent {
+  repeated string image_urls = 1;
+  string caption = 2;
+  repeated string alt_texts = 3;
+  string photographer = 4;
+}
+
+message LinkContent {
+  string url = 1;
+  string preview_title = 2;
+  string preview_description = 3;
+  string preview_image = 4;
+  PreviewStatus preview_status = 5;
+}
+
+// PostMetric for maps
+message PostMetric {
+  double value = 1;
+  string unit = 2;
+  int64 last_updated = 3;
+  MetricType type = 4;
+  repeated MetricHistory history = 5;
+}
+
+message MetricHistory {
+  int64 timestamp = 1;
+  double value = 2;
+  string label = 3;
+}
+
+// CategoryInfo for maps
+message CategoryInfo {
+  string name = 1;
+  string description = 2;
+  CategoryType type = 3;
+  int32 post_count = 4;
+  repeated string subcategories = 5;
+}
+
+// Comment with recursive structure
+message Comment {
+  int32 id = 1;
+  int32 user_id = 2;
+  string username = 3;
+  string content = 4;
+  int64 created_at = 5;
+  int64 updated_at = 6;
+  CommentStatus status = 7;
+  int32 likes = 8;
+  bool pinned = 9;
+  map<string, string> metadata = 10;
+
+  // oneof comment_type
+  oneof comment_type {
+    TextComment text_comment = 11;
+    MediaComment media_comment = 12;
+  }
+
+  // Recursive structure - replies can contain nested replies
+  repeated Reply replies = 13;
+}
+
+// Comment types
+message TextComment {
+  string formatted_text = 1;
+  TextFormat format = 2;
+  repeated string mentions = 3;
+}
+
+message MediaComment {
+  repeated string media_urls = 1;
+  MediaType media_type = 2;
+  string description = 3;
+}
+
+// Reply with recursive structure
+message Reply {
+  int32 id = 1;
+  int32 user_id = 2;
+  string username = 3;
+  string content = 4;
+  int64 created_at = 5;
+  int32 parent_comment_id = 6;
+  ReplyType type = 7;
+  int32 likes = 8;
+  
+  // Recursive - replies can contain more nested replies
+  repeated Reply nested_replies = 9;
+}
+
+// Post metadata
+message PostMetadata {
+  string seo_title = 1;
+  string seo_description = 2;
+  repeated string keywords = 3;
+  map<string, string> custom_fields = 4;
+  SocialMetadata social_meta = 5;
+  repeated Collaborator collaborators = 6;
+}
+
+message SocialMetadata {
+  string og_title = 1;
+  string og_description = 2;
+  string og_image = 3;
+  string twitter_card = 4;
+  map<string, string> platform_specific = 5;
+}
+
+message Collaborator {
+  int32 user_id = 1;
+  string username = 2;
+  CollaboratorRole role = 3;
+  repeated string permissions = 4;
+}
+
+// Comprehensive enums with unique prefixes
+enum PostStatus {
+  POST_UNKNOWN = 0;
+  POST_DRAFT = 1;
+  POST_PUBLISHED = 2;
+  POST_ARCHIVED = 3;
+  POST_DELETED = 4;
+}
+
+enum TextFormat {
+  TEXT_UNKNOWN = 0;
+  TEXT_PLAIN = 1;
+  TEXT_MARKDOWN = 2;
+  TEXT_HTML = 3;
+  TEXT_RICH = 4;
+}
+
+enum VideoQuality {
+  VIDEO_QUALITY_UNKNOWN = 0;
+  VIDEO_QUALITY_240P = 1;
+  VIDEO_QUALITY_480P = 2;
+  VIDEO_QUALITY_720P = 3;
+  VIDEO_QUALITY_1080P = 4;
+  VIDEO_QUALITY_4K = 5;
+}
+
+enum PreviewStatus {
+  PREVIEW_UNKNOWN = 0;
+  PREVIEW_LOADING = 1;
+  PREVIEW_LOADED = 2;
+  PREVIEW_ERROR = 3;
+  PREVIEW_BLOCKED = 4;
+}
+
+enum CommentStatus {
+  COMMENT_UNKNOWN = 0;
+  COMMENT_VISIBLE = 1;
+  COMMENT_HIDDEN = 2;
+  COMMENT_DELETED = 3;
+  COMMENT_FLAGGED = 4;
+}
+
+enum ReplyType {
+  REPLY_UNKNOWN = 0;
+  REPLY_DIRECT = 1;
+  REPLY_MENTION = 2;
+  REPLY_QUOTE = 3;
+}
+
+enum MediaType {
+  MEDIA_UNKNOWN = 0;
+  MEDIA_IMAGE = 1;
+  MEDIA_VIDEO = 2;
+  MEDIA_AUDIO = 3;
+  MEDIA_DOCUMENT = 4;
+}
+
+enum MetricType {
+  METRIC_UNKNOWN = 0;
+  METRIC_ENGAGEMENT = 1;
+  METRIC_VIEWS = 2;
+  METRIC_SHARES = 3;
+  METRIC_COMMENTS = 4;
+}
+
+enum CategoryType {
+  CATEGORY_UNKNOWN = 0;
+  CATEGORY_PRIMARY = 1;
+  CATEGORY_SECONDARY = 2;
+  CATEGORY_TAG = 3;
+}
+
+enum ContentRating {
+  RATING_UNKNOWN = 0;
+  RATING_GENERAL = 1;
+  RATING_TEEN = 2;
+  RATING_MATURE = 3;
+  RATING_ADULT = 4;
+}
+
+enum ContentFlag {
+  FLAG_NONE = 0;
+  FLAG_SPAM = 1;
+  FLAG_INAPPROPRIATE = 2;
+  FLAG_COPYRIGHT = 3;
+  FLAG_VIOLENCE = 4;
+}
+
+enum CollaboratorRole {
+  ROLE_UNKNOWN = 0;
+  ROLE_VIEWER = 1;
+  ROLE_COMMENTER = 2;
+  ROLE_EDITOR = 3;
+  ROLE_ADMIN = 4;
+} 
