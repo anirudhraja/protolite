@@ -485,10 +485,8 @@ func (r *Registry) convertProtoType(protoType string) (*schema.FieldType, error)
 	case "double":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeDouble}, nil
 	default:
-		// Assume it's a message or enum type
-		if strings.Contains(protoType, "Status") || protoType == "UserStatus" || protoType == "PostStatus" {
-			return &schema.FieldType{Kind: schema.KindEnum, EnumType: protoType}, nil
-		}
+		// For non-primitive types, we need to determine if it's an enum or message
+		// This will be resolved later in buildDefinitions after all types are registered
 		return &schema.FieldType{Kind: schema.KindMessage, MessageType: protoType}, nil
 	}
 }
@@ -605,16 +603,20 @@ func (r *Registry) buildServices(protoFile *schema.ProtoFile) error {
 // resolveMessageFields resolves field type references within a message
 func (r *Registry) resolveMessageFields(message *schema.Message, packageName string) error {
 	for _, field := range message.Fields {
-		// Resolve message and enum type references
-		if field.Type.Kind == schema.KindMessage {
-			if _, err := r.GetMessage(field.Type.MessageType); err != nil {
-				return fmt.Errorf("field %s references unknown message type %s", field.Name, field.Type.MessageType)
+		// For map fields, resolve both key and value types
+		if field.Type.Kind == schema.KindMap {
+			if err := r.resolveFieldType(field.Type.MapKey, packageName); err != nil {
+				return fmt.Errorf("failed to resolve map key type in field %s: %v", field.Name, err)
 			}
+			if err := r.resolveFieldType(field.Type.MapValue, packageName); err != nil {
+				return fmt.Errorf("failed to resolve map value type in field %s: %v", field.Name, err)
+			}
+			continue
 		}
-		if field.Type.Kind == schema.KindEnum {
-			if _, err := r.GetEnum(field.Type.EnumType); err != nil {
-				return fmt.Errorf("field %s references unknown enum type %s", field.Name, field.Type.EnumType)
-			}
+
+		// For regular fields, resolve the field type
+		if err := r.resolveFieldType(&field.Type, packageName); err != nil {
+			return fmt.Errorf("failed to resolve field %s: %v", field.Name, err)
 		}
 	}
 
@@ -622,6 +624,45 @@ func (r *Registry) resolveMessageFields(message *schema.Message, packageName str
 	for _, nestedMsg := range message.NestedTypes {
 		if err := r.resolveMessageFields(nestedMsg, packageName); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// resolveFieldType resolves a single field type, determining if it's an enum or message
+func (r *Registry) resolveFieldType(fieldType *schema.FieldType, packageName string) error {
+	// Skip primitive types
+	if fieldType.Kind == schema.KindPrimitive || fieldType.Kind == schema.KindMap {
+		return nil
+	}
+
+	// For types that were initially marked as message, check if they're actually enums
+	if fieldType.Kind == schema.KindMessage {
+		typeName := fieldType.MessageType
+
+		// First check if it's an enum
+		if _, err := r.GetEnum(typeName); err == nil {
+			// It's an enum, fix the field type
+			fieldType.Kind = schema.KindEnum
+			fieldType.EnumType = typeName
+			fieldType.MessageType = "" // Clear the message type
+			return nil
+		}
+
+		// Check if it's a message
+		if _, err := r.GetMessage(typeName); err == nil {
+			// It's a message, keep as is
+			return nil
+		}
+
+		return fmt.Errorf("unknown type %s", typeName)
+	}
+
+	// For enum fields, verify the enum exists
+	if fieldType.Kind == schema.KindEnum {
+		if _, err := r.GetEnum(fieldType.EnumType); err != nil {
+			return fmt.Errorf("enum type %s not found", fieldType.EnumType)
 		}
 	}
 

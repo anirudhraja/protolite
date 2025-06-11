@@ -1,0 +1,313 @@
+syntax = "proto3";
+
+package blog;
+
+message Post {
+    int32 id = 1;
+    string title = 2;
+    int32 author_id = 4;  // References User.id
+    PostStatus status = 5;
+    repeated string tags = 6;
+    int64 created_at = 7;
+    int64 updated_at = 8;
+    int32 view_count = 9;
+    bool featured = 10;
+    
+    // oneof for different content types
+    oneof content {
+        TextContent text_content = 11;
+        VideoContent video_content = 12;
+        ImageContent image_content = 13;
+        LinkContent link_content = 14;
+    }
+    
+    // Nested repeated messages - comments with nested replies
+    repeated Comment comments = 15;
+    
+    // Different map types
+    map<string, PostMetric> metrics = 16;        // performance metrics by type
+    map<int32, string> revisions = 17;           // revision history by version number
+    map<string, double> analytics = 18;          // analytics data (click_rate, bounce_rate, etc.)
+    map<string, CategoryInfo> categories = 19;   // category assignments
+    
+    // Post metadata
+    PostMetadata metadata = 20;
+    
+    // Content rating and flags
+    ContentRating rating = 21;
+    repeated ContentFlag flags = 22;
+}
+
+// Nested content type messages for oneof
+message TextContent {
+    string body = 1;
+    TextFormat format = 2;  // markdown, html, plain
+    int32 word_count = 3;
+    repeated string footnotes = 4;
+}
+
+message VideoContent {
+    string video_url = 1;
+    string thumbnail_url = 2;
+    int32 duration_seconds = 3;
+    VideoQuality quality = 4;
+    repeated string subtitles = 5;  // nested repeated
+    VideoStats stats = 6;  // nested message
+}
+
+message VideoStats {
+    int32 play_count = 1;
+    double average_watch_time = 2;
+    int32 likes = 3;
+    int32 shares = 4;
+}
+
+message ImageContent {
+    repeated string image_urls = 1;  // multiple images
+    string caption = 2;
+    ImageMetadata image_metadata = 3;  // nested
+    repeated ImageTag image_tags = 4;  // nested repeated
+}
+
+message ImageMetadata {
+    int32 width = 1;
+    int32 height = 2;
+    string format = 3;  // jpg, png, webp
+    int64 file_size = 4;
+    GPSLocation location = 5;  // deeply nested
+}
+
+message GPSLocation {
+    double latitude = 1;
+    double longitude = 2;
+    double altitude = 3;
+    int64 timestamp = 4;
+}
+
+message ImageTag {
+    string name = 1;
+    int32 x_position = 2;
+    int32 y_position = 3;
+    TagType type = 4;
+}
+
+message LinkContent {
+    string url = 1;
+    string description = 2;
+    LinkPreview preview = 3;  // nested
+    repeated string related_links = 4;
+}
+
+message LinkPreview {
+    string title = 1;
+    string description = 2;
+    string image_url = 3;
+    string site_name = 4;
+    PreviewStatus status = 5;
+}
+
+// Nested message for comments with recursive structure
+message Comment {
+    int32 id = 1;
+    int32 user_id = 2;
+    string username = 3;
+    string content = 4;
+    int64 created_at = 5;
+    int64 updated_at = 6;
+    CommentStatus status = 7;
+    
+    // Nested repeated replies (recursive structure)
+    repeated Reply replies = 8;
+    
+    // Comment metadata
+    map<string, string> metadata = 9;
+    int32 likes = 10;
+    bool pinned = 11;
+    
+    // oneof for comment type
+    oneof comment_type {
+        TextComment text_comment = 12;
+        MediaComment media_comment = 13;
+        ReactionsComment reactions_comment = 14;
+    }
+}
+
+// Nested reply structure (can contain more replies)
+message Reply {
+    int32 id = 1;
+    int32 user_id = 2;
+    string username = 3;
+    string content = 4;
+    int64 created_at = 5;
+    int32 parent_comment_id = 6;
+    repeated Reply nested_replies = 7;  // recursive nesting
+    ReplyType type = 8;
+    int32 likes = 9;
+}
+
+// Comment type messages for oneof
+message TextComment {
+    string formatted_text = 1;
+    TextFormat format = 2;
+    repeated string mentions = 3;
+}
+
+message MediaComment {
+    repeated string media_urls = 1;
+    MediaType media_type = 2;
+    string description = 3;
+}
+
+message ReactionsComment {
+    map<string, int32> reactions = 1;  // emoji -> count
+    string primary_reaction = 2;
+}
+
+// Map value messages
+message PostMetric {
+    double value = 1;
+    string unit = 2;
+    int64 last_updated = 3;
+    MetricType type = 4;
+    repeated DataPoint history = 5;  // nested repeated in map value
+}
+
+message DataPoint {
+    int64 timestamp = 1;
+    double value = 2;
+    string label = 3;
+}
+
+message CategoryInfo {
+    string name = 1;
+    string description = 2;
+    CategoryType type = 3;
+    int32 post_count = 4;
+    repeated string subcategories = 5;
+}
+
+// Post metadata with nested structures
+message PostMetadata {
+    string seo_title = 1;
+    string seo_description = 2;
+    repeated string keywords = 3;
+    map<string, string> custom_fields = 4;
+    SocialMediaMeta social_meta = 5;  // nested
+    repeated CollaboratorInfo collaborators = 6;  // nested repeated
+}
+
+message SocialMediaMeta {
+    string og_title = 1;
+    string og_description = 2;
+    string og_image = 3;
+    string twitter_card = 4;
+    map<string, string> platform_specific = 5;
+}
+
+message CollaboratorInfo {
+    int32 user_id = 1;
+    string username = 2;
+    CollaboratorRole role = 3;
+    repeated string permissions = 4;
+}
+
+// Enums
+enum PostStatus {
+    POST_DRAFT = 0;
+    POST_PUBLISHED = 1;
+    POST_ARCHIVED = 2;
+    POST_DELETED = 3;
+    POST_SCHEDULED = 4;
+    POST_IN_REVIEW = 5;
+}
+
+enum TextFormat {
+    TEXT_PLAIN = 0;
+    TEXT_MARKDOWN = 1;
+    TEXT_HTML = 2;
+    TEXT_RICH_TEXT = 3;
+}
+
+enum VideoQuality {
+    VIDEO_SD = 0;
+    VIDEO_HD = 1;
+    VIDEO_FULL_HD = 2;
+    VIDEO_ULTRA_HD = 3;
+}
+
+enum TagType {
+    TAG_PERSON = 0;
+    TAG_LOCATION = 1;
+    TAG_OBJECT = 2;
+    TAG_BRAND = 3;
+}
+
+enum PreviewStatus {
+    PREVIEW_LOADING = 0;
+    PREVIEW_LOADED = 1;
+    PREVIEW_FAILED = 2;
+    PREVIEW_UNAVAILABLE = 3;
+}
+
+enum CommentStatus {
+    COMMENT_VISIBLE = 0;
+    COMMENT_HIDDEN = 1;
+    COMMENT_DELETED = 2;
+    COMMENT_FLAGGED = 3;
+    COMMENT_PENDING_MODERATION = 4;
+}
+
+enum ReplyType {
+    REPLY_DIRECT = 0;
+    REPLY_MENTION = 1;
+    REPLY_QUOTE = 2;
+    REPLY_REACTION = 3;
+}
+
+enum MediaType {
+    MEDIA_IMAGE = 0;
+    MEDIA_VIDEO = 1;
+    MEDIA_AUDIO = 2;
+    MEDIA_GIF = 3;
+    MEDIA_DOCUMENT = 4;
+}
+
+enum MetricType {
+    METRIC_ENGAGEMENT = 0;
+    METRIC_PERFORMANCE = 1;
+    METRIC_TRAFFIC = 2;
+    METRIC_CONVERSION = 3;
+}
+
+enum CategoryType {
+    CATEGORY_PRIMARY = 0;
+    CATEGORY_SECONDARY = 1;
+    CATEGORY_TAG = 2;
+    CATEGORY_CUSTOM = 3;
+}
+
+enum ContentRating {
+    RATING_GENERAL = 0;
+    RATING_TEEN = 1;
+    RATING_MATURE = 2;
+    RATING_ADULT = 3;
+    RATING_RESTRICTED = 4;
+}
+
+enum ContentFlag {
+    FLAG_NONE = 0;
+    FLAG_INAPPROPRIATE = 1;
+    FLAG_SPAM = 2;
+    FLAG_MISINFORMATION = 3;
+    FLAG_COPYRIGHT = 4;
+    FLAG_VIOLENCE = 5;
+    FLAG_HATE_SPEECH = 6;
+}
+
+enum CollaboratorRole {
+    ROLE_VIEWER = 0;
+    ROLE_COMMENTER = 1;
+    ROLE_EDITOR = 2;
+    ROLE_ADMIN = 3;
+    ROLE_OWNER = 4;
+} 

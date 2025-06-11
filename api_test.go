@@ -466,8 +466,8 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 	proto := NewProtolite()
 
 	t.Run("unmarshal_with_schema", func(t *testing.T) {
-		proto.LoadSchemaFromFile("testdata/user.proto")
-		proto.LoadSchemaFromFile("testdata/post.proto")
+		proto.LoadSchemaFromFile("sampleapp/testdata/post.proto")
+		proto.LoadSchemaFromFile("sampleapp/testdata/user.proto")
 
 		// Verify both files are loaded
 		pImpl := proto.(*protolite)
@@ -484,10 +484,10 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		hasUser := false
 		hasPost := false
 		for _, path := range protoFiles {
-			if path == "testdata/user.proto" {
+			if path == "sampleapp/testdata/user.proto" {
 				hasUser = true
 			}
-			if path == "testdata/post.proto" {
+			if path == "sampleapp/testdata/post.proto" {
 				hasPost = true
 			}
 		}
