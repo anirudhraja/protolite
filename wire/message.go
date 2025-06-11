@@ -69,6 +69,14 @@ func (me *MessageEncoder) EncodeMessage(data map[string]interface{}, msg *schema
 			continue // Skip unknown fields
 		}
 
+		// Handle map fields specially
+		if field.Type.Kind == schema.KindMap {
+			if err := me.encodeMapField(messageEncoder, fieldValue, field); err != nil {
+				return fmt.Errorf("failed to encode map field %s: %v", fieldName, err)
+			}
+			continue
+		}
+
 		// For repeated fields, encodeFieldValue handles the field tags
 		if field.Label == schema.LabelRepeated {
 			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
@@ -109,8 +117,6 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 		return me.encodeMessageField(encoder, value, field.Type.MessageType)
 	case schema.KindEnum:
 		return me.encodeEnumField(encoder, value)
-	case schema.KindMap:
-		return me.encodeMapField(encoder, value, field)
 	default:
 		return fmt.Errorf("unsupported field type: %s", field.Type.Kind)
 	}
@@ -254,18 +260,29 @@ func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}) e
 
 // encodeMapField encodes a map field
 func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, field *schema.Field) error {
-	mapData, ok := value.(map[interface{}]interface{})
-	if !ok {
-		return fmt.Errorf("map value must be map[interface{}]interface{}")
+	var mapData map[interface{}]interface{}
+
+	// Handle different map types
+	switch v := value.(type) {
+	case map[interface{}]interface{}:
+		mapData = v
+	case map[string]interface{}:
+		mapData = make(map[interface{}]interface{})
+		for k, val := range v {
+			mapData[k] = val
+		}
+	case map[string]string:
+		mapData = make(map[interface{}]interface{})
+		for k, val := range v {
+			mapData[k] = val
+		}
+	default:
+		return fmt.Errorf("map value must be map[string]string, map[string]interface{}, or map[interface{}]interface{}, got %T", value)
 	}
 
+	// Use the map encoder to encode the entire map with field tags
 	mapEncoder := NewMapEncoder(encoder)
-	for key, val := range mapData {
-		if err := mapEncoder.EncodeMapEntry(key, val, field.Type.MapKey, field.Type.MapValue); err != nil {
-			return err
-		}
-	}
-	return nil
+	return mapEncoder.EncodeMap(mapData, field.Type.MapKey, field.Type.MapValue, field.Number)
 }
 
 // UTILITY METHODS
@@ -305,7 +322,7 @@ func (me *MessageEncoder) findFieldByName(msg *schema.Message, fieldName string)
 	return nil
 }
 
-// Convenience methods for direct access (maintains backward compatibility)
+// Convenience methods for direct access (main maintains backward compatibility)
 
 // DecodeMessage - convenience method for main decoder
 func (d *Decoder) DecodeMessage(messageType string) (interface{}, error) {
