@@ -41,6 +41,7 @@ func DecodeMessage(data []byte, msg *schema.Message, registry *registry.Registry
 func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
 	mapCollector := make(map[string]map[interface{}]interface{})
+	repeatedCollector := make(map[string][]interface{})
 
 	for d.pos < len(d.buf) {
 		// Read field tag using varint decoder
@@ -75,15 +76,23 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 			return nil, fmt.Errorf("failed to decode field %s: %v", field.Name, err)
 		}
 
-		// Handle maps specially
+		// Handle different field types
 		if field.Type.Kind == schema.KindMap {
+			// Handle maps specially
 			if mapCollector[field.Name] == nil {
 				mapCollector[field.Name] = make(map[interface{}]interface{})
 			}
 			if entryMap, ok := value.(map[string]interface{}); ok {
 				mapCollector[field.Name][entryMap["key"]] = entryMap["value"]
 			}
+		} else if field.Label == schema.LabelRepeated {
+			// Handle repeated fields
+			if repeatedCollector[field.Name] == nil {
+				repeatedCollector[field.Name] = make([]interface{}, 0)
+			}
+			repeatedCollector[field.Name] = append(repeatedCollector[field.Name], value)
 		} else {
+			// Handle regular fields
 			result[field.Name] = value
 		}
 	}
@@ -91,6 +100,11 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 	// Add collected maps to result
 	for fieldName, mapData := range mapCollector {
 		result[fieldName] = mapData
+	}
+
+	// Add collected repeated fields to result
+	for fieldName, repeatedData := range repeatedCollector {
+		result[fieldName] = repeatedData
 	}
 
 	return result, nil

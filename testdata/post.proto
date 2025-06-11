@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package blog;
+
+message Post {
+    int32 id = 1;
+    string title = 2;
+    string content = 3;
+    int32 author_id = 4;  // References User.id
+    PostStatus status = 5;
+    repeated string tags = 6;
+    int64 created_at = 7;
+    int64 updated_at = 8;
+    int32 view_count = 9;
+    bool featured = 10;
+}
+
+enum PostStatus {
+    DRAFT = 0;
+    PUBLISHED = 1;
+    ARCHIVED = 2;
+    DELETED = 3;
+} 

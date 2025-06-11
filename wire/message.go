@@ -69,17 +69,24 @@ func (me *MessageEncoder) EncodeMessage(data map[string]interface{}, msg *schema
 			continue // Skip unknown fields
 		}
 
-		// Encode field tag
-		ve := NewVarintEncoder(messageEncoder)
-		wireType := me.getWireType(&field.Type)
-		tag := MakeTag(FieldNumber(field.Number), wireType)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode field tag for %s: %v", fieldName, err)
-		}
+		// For repeated fields, encodeFieldValue handles the field tags
+		if field.Label == schema.LabelRepeated {
+			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
+				return fmt.Errorf("failed to encode field %s: %v", fieldName, err)
+			}
+		} else {
+			// For non-repeated fields, encode field tag first
+			ve := NewVarintEncoder(messageEncoder)
+			wireType := me.getWireType(&field.Type)
+			tag := MakeTag(FieldNumber(field.Number), wireType)
+			if err := ve.EncodeVarint(uint64(tag)); err != nil {
+				return fmt.Errorf("failed to encode field tag for %s: %v", fieldName, err)
+			}
 
-		// Encode field value
-		if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
-			return fmt.Errorf("failed to encode field %s: %v", fieldName, err)
+			// Encode field value
+			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
+				return fmt.Errorf("failed to encode field %s: %v", fieldName, err)
+			}
 		}
 	}
 
@@ -90,11 +97,16 @@ func (me *MessageEncoder) EncodeMessage(data map[string]interface{}, msg *schema
 
 // encodeFieldValue encodes a field value based on its type
 func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, field *schema.Field) error {
+	// Handle repeated fields
+	if field.Label == schema.LabelRepeated {
+		return me.encodeRepeatedField(encoder, value, field)
+	}
+
 	switch field.Type.Kind {
 	case schema.KindPrimitive:
 		return me.encodePrimitiveField(encoder, value, field.Type.PrimitiveType)
 	case schema.KindMessage:
-		return me.encodeMessageField(encoder, value)
+		return me.encodeMessageField(encoder, value, field.Type.MessageType)
 	case schema.KindEnum:
 		return me.encodeEnumField(encoder, value)
 	case schema.KindMap:
@@ -102,6 +114,58 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 	default:
 		return fmt.Errorf("unsupported field type: %s", field.Type.Kind)
 	}
+}
+
+// encodeRepeatedField encodes a repeated field
+func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{}, field *schema.Field) error {
+	slice, ok := value.([]interface{})
+	if !ok {
+		// Try to convert []map[string]interface{} to []interface{}
+		if mapSlice, ok := value.([]map[string]interface{}); ok {
+			slice = make([]interface{}, len(mapSlice))
+			for i, v := range mapSlice {
+				slice[i] = v
+			}
+		} else if stringSlice, ok := value.([]string); ok {
+			slice = make([]interface{}, len(stringSlice))
+			for i, v := range stringSlice {
+				slice[i] = v
+			}
+		} else {
+			return fmt.Errorf("repeated field value must be a slice, got %T", value)
+		}
+	}
+
+	// For each element in the slice, encode field tag + value
+	for _, element := range slice {
+		// Encode field tag for each element
+		ve := NewVarintEncoder(encoder)
+		wireType := me.getWireType(&field.Type)
+		tag := MakeTag(FieldNumber(field.Number), wireType)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode repeated field tag: %v", err)
+		}
+
+		// Encode the element value
+		switch field.Type.Kind {
+		case schema.KindPrimitive:
+			if err := me.encodePrimitiveField(encoder, element, field.Type.PrimitiveType); err != nil {
+				return fmt.Errorf("failed to encode repeated primitive element: %v", err)
+			}
+		case schema.KindMessage:
+			if err := me.encodeMessageField(encoder, element, field.Type.MessageType); err != nil {
+				return fmt.Errorf("failed to encode repeated message element: %v", err)
+			}
+		case schema.KindEnum:
+			if err := me.encodeEnumField(encoder, element); err != nil {
+				return fmt.Errorf("failed to encode repeated enum element: %v", err)
+			}
+		default:
+			return fmt.Errorf("unsupported repeated field type: %s", field.Type.Kind)
+		}
+	}
+
+	return nil
 }
 
 // encodePrimitiveField encodes a primitive field
@@ -140,14 +204,41 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 }
 
 // encodeMessageField encodes a nested message field
-func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}) error {
-	messageBytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("message value must be []byte")
+func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}, messageTypeName string) error {
+	// If it's already bytes, encode directly
+	if messageBytes, ok := value.([]byte); ok {
+		be := NewBytesEncoder(encoder)
+		return be.EncodeBytes(messageBytes)
 	}
 
+	// If it's a map, we need to encode it as a message
+	messageData, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("message value must be map[string]interface{} or []byte, got %T", value)
+	}
+
+	// Look up the message schema
+	if me.encoder.registry == nil {
+		return fmt.Errorf("registry is required to encode message fields")
+	}
+
+	messageSchema, err := me.encoder.registry.GetMessage(messageTypeName)
+	if err != nil {
+		return fmt.Errorf("failed to get message schema for %s: %v", messageTypeName, err)
+	}
+
+	// Create a temporary encoder for the nested message
+	nestedEncoder := NewEncoder()
+	nestedEncoder.registry = me.encoder.registry
+
+	nestedMessageEncoder := NewMessageEncoder(nestedEncoder)
+	if err := nestedMessageEncoder.EncodeMessage(messageData, messageSchema); err != nil {
+		return fmt.Errorf("failed to encode nested message: %v", err)
+	}
+
+	// Encode the nested message bytes
 	be := NewBytesEncoder(encoder)
-	return be.EncodeBytes(messageBytes)
+	return be.EncodeBytes(nestedEncoder.Bytes())
 }
 
 // encodeEnumField encodes an enum field

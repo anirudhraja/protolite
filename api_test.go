@@ -461,3 +461,253 @@ func TestProtolite_Integration(t *testing.T) {
 		}
 	})
 }
+
+func TestProtolite_UnmarshalWithSchema(t *testing.T) {
+	proto := NewProtolite()
+
+	t.Run("unmarshal_with_schema", func(t *testing.T) {
+		proto.LoadSchemaFromFile("testdata/user.proto")
+		proto.LoadSchemaFromFile("testdata/post.proto")
+
+		// Verify both files are loaded
+		pImpl := proto.(*protolite)
+		protoFiles := pImpl.registry.ListProtoFiles()
+
+		if len(protoFiles) != 2 {
+			t.Errorf("Expected 2 proto files, got %d", len(protoFiles))
+			for _, path := range protoFiles {
+				t.Logf("Loaded file: %s", path)
+			}
+		}
+
+		// Check specific files exist
+		hasUser := false
+		hasPost := false
+		for _, path := range protoFiles {
+			if path == "testdata/user.proto" {
+				hasUser = true
+			}
+			if path == "testdata/post.proto" {
+				hasPost = true
+			}
+		}
+
+		if !hasUser {
+			t.Error("user.proto not found in registry")
+		}
+		if !hasPost {
+			t.Error("post.proto not found in registry")
+		}
+
+		// Create User data with 2 Posts
+		userData := map[string]interface{}{
+			"id":     int32(1),
+			"name":   "John Doe",
+			"email":  "john.doe@example.com",
+			"active": true,
+			"status": int32(1), // ACTIVE
+			"posts": []map[string]interface{}{
+				{
+					"id":         int32(101),
+					"title":      "My First Blog Post",
+					"content":    "This is my first blog post about Go programming and protobuf.",
+					"author_id":  int32(1),
+					"status":     int32(1), // PUBLISHED
+					"tags":       []string{"go", "programming", "protobuf"},
+					"created_at": int64(1640995200), // 2022-01-01 00:00:00 UTC
+					"updated_at": int64(1640995200),
+					"view_count": int32(150),
+					"featured":   true,
+				},
+				{
+					"id":         int32(102),
+					"title":      "Advanced Protobuf Patterns",
+					"content":    "In this post, I'll share advanced protobuf patterns and best practices.",
+					"author_id":  int32(1),
+					"status":     int32(1), // PUBLISHED
+					"tags":       []string{"protobuf", "advanced", "patterns"},
+					"created_at": int64(1641081600), // 2022-01-02 00:00:00 UTC
+					"updated_at": int64(1641168000), // 2022-01-03 00:00:00 UTC (updated)
+					"view_count": int32(275),
+					"featured":   false,
+				},
+			},
+			"metadata": map[string]string{
+				"timezone":   "UTC",
+				"theme":      "dark",
+				"language":   "en",
+				"newsletter": "subscribed",
+			},
+			"created_at": int64(1609459200), // 2021-01-01 00:00:00 UTC
+		}
+
+		t.Logf("Original User Data: %+v", userData)
+
+		// Marshal the user data with schema
+		encodedData, err := proto.MarshalWithSchema(userData, "User")
+		if err != nil {
+			t.Fatalf("Failed to marshal user data: %v", err)
+		}
+
+		t.Logf("Encoded data size: %d bytes", len(encodedData))
+
+		// Test Parse (schema-less)
+		parsedData, err := proto.Parse(encodedData)
+		if err != nil {
+			t.Fatalf("Failed to parse data: %v", err)
+		}
+
+		t.Logf("Parsed data (schema-less): %+v", parsedData)
+
+		// Test UnmarshalWithSchema (schema-based)
+		userMap, err := proto.UnmarshalWithSchema(encodedData, "User")
+		if err != nil {
+			t.Fatalf("Failed to unmarshal: %v", err)
+		}
+
+		t.Logf("Unmarshaled User: %+v", userMap)
+
+		// Verify user fields
+		if userMap["id"] != int32(1) {
+			t.Errorf("Expected user id=1, got %v", userMap["id"])
+		}
+		if userMap["name"] != "John Doe" {
+			t.Errorf("Expected user name='John Doe', got %v", userMap["name"])
+		}
+		if userMap["email"] != "john.doe@example.com" {
+			t.Errorf("Expected user email='john.doe@example.com', got %v", userMap["email"])
+		}
+		if userMap["active"] != true {
+			t.Errorf("Expected user active=true, got %v", userMap["active"])
+		}
+		if userMap["status"] != int32(1) {
+			t.Errorf("Expected user status=1, got %v", userMap["status"])
+		}
+
+		// Verify posts
+		posts, ok := userMap["posts"].([]interface{})
+		if !ok {
+			t.Fatalf("Expected posts to be a slice, got %T", userMap["posts"])
+		}
+
+		if len(posts) != 2 {
+			t.Errorf("Expected 2 posts, got %d", len(posts))
+		}
+
+		// Verify first post
+		if len(posts) > 0 {
+			post1, ok := posts[0].(map[string]interface{})
+			if !ok {
+				t.Fatalf("Expected first post to be a map, got %T", posts[0])
+			}
+
+			if post1["id"] != int32(101) {
+				t.Errorf("Expected first post id=101, got %v", post1["id"])
+			}
+			if post1["title"] != "My First Blog Post" {
+				t.Errorf("Expected first post title='My First Blog Post', got %v", post1["title"])
+			}
+			if post1["author_id"] != int32(1) {
+				t.Errorf("Expected first post author_id=1, got %v", post1["author_id"])
+			}
+			if post1["status"] != int32(1) {
+				t.Errorf("Expected first post status=1, got %v", post1["status"])
+			}
+			if post1["view_count"] != int32(150) {
+				t.Errorf("Expected first post view_count=150, got %v", post1["view_count"])
+			}
+			if post1["featured"] != true {
+				t.Errorf("Expected first post featured=true, got %v", post1["featured"])
+			}
+
+			// Check tags
+			tags1, ok := post1["tags"].([]interface{})
+			if !ok {
+				t.Errorf("Expected first post tags to be a slice, got %T", post1["tags"])
+			} else if len(tags1) != 3 {
+				t.Errorf("Expected first post to have 3 tags, got %d", len(tags1))
+			} else {
+				expectedTags1 := []string{"go", "programming", "protobuf"}
+				for i, tag := range expectedTags1 {
+					if i < len(tags1) && tags1[i] != tag {
+						t.Errorf("Expected first post tag[%d]='%s', got %v", i, tag, tags1[i])
+					}
+				}
+			}
+
+			t.Logf("First Post: %+v", post1)
+		}
+
+		// Verify second post
+		if len(posts) > 1 {
+			post2, ok := posts[1].(map[string]interface{})
+			if !ok {
+				t.Fatalf("Expected second post to be a map, got %T", posts[1])
+			}
+
+			if post2["id"] != int32(102) {
+				t.Errorf("Expected second post id=102, got %v", post2["id"])
+			}
+			if post2["title"] != "Advanced Protobuf Patterns" {
+				t.Errorf("Expected second post title='Advanced Protobuf Patterns', got %v", post2["title"])
+			}
+			if post2["author_id"] != int32(1) {
+				t.Errorf("Expected second post author_id=1, got %v", post2["author_id"])
+			}
+			if post2["status"] != int32(1) {
+				t.Errorf("Expected second post status=1, got %v", post2["status"])
+			}
+			if post2["view_count"] != int32(275) {
+				t.Errorf("Expected second post view_count=275, got %v", post2["view_count"])
+			}
+			if post2["featured"] != false {
+				t.Errorf("Expected second post featured=false, got %v", post2["featured"])
+			}
+
+			// Check tags
+			tags2, ok := post2["tags"].([]interface{})
+			if !ok {
+				t.Errorf("Expected second post tags to be a slice, got %T", post2["tags"])
+			} else if len(tags2) != 3 {
+				t.Errorf("Expected second post to have 3 tags, got %d", len(tags2))
+			} else {
+				expectedTags2 := []string{"protobuf", "advanced", "patterns"}
+				for i, tag := range expectedTags2 {
+					if i < len(tags2) && tags2[i] != tag {
+						t.Errorf("Expected second post tag[%d]='%s', got %v", i, tag, tags2[i])
+					}
+				}
+			}
+
+			t.Logf("Second Post: %+v", post2)
+		}
+
+		// Verify metadata
+		metadata, ok := userMap["metadata"].(map[string]interface{})
+		if !ok {
+			t.Errorf("Expected metadata to be a map, got %T", userMap["metadata"])
+		} else {
+			expectedMetadata := map[string]string{
+				"timezone":   "UTC",
+				"theme":      "dark",
+				"language":   "en",
+				"newsletter": "subscribed",
+			}
+			for key, expectedValue := range expectedMetadata {
+				if metadata[key] != expectedValue {
+					t.Errorf("Expected metadata[%s]='%s', got %v", key, expectedValue, metadata[key])
+				}
+			}
+		}
+
+		// Verify created_at
+		if userMap["created_at"] != int64(1609459200) {
+			t.Errorf("Expected user created_at=1609459200, got %v", userMap["created_at"])
+		}
+
+		t.Log("✅ User-Posts relationship test completed successfully!")
+		t.Log("✅ Both proto files loaded correctly")
+		t.Log("✅ User with 2 Posts marshaled and unmarshaled correctly")
+		t.Log("✅ All field values verified")
+	})
+}
