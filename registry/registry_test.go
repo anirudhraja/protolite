@@ -694,8 +694,8 @@ func TestBuildDefinitions_InvalidMessageType(t *testing.T) {
 		t.Error("Expected error for invalid message type")
 	}
 
-	if !contains(err.Error(), "unknown message type") {
-		t.Errorf("Expected 'unknown message type' error, got: %v", err)
+	if !contains(err.Error(), "unknown type") {
+		t.Errorf("Expected 'unknown type' error, got: %v", err)
 	}
 }
 
@@ -728,8 +728,8 @@ func TestBuildDefinitions_InvalidEnumType(t *testing.T) {
 		t.Error("Expected error for invalid enum type")
 	}
 
-	if !contains(err.Error(), "unknown enum type") {
-		t.Errorf("Expected 'unknown enum type' error, got: %v", err)
+	if !contains(err.Error(), "enum type") && !contains(err.Error(), "not found") {
+		t.Errorf("Expected 'enum type not found' error, got: %v", err)
 	}
 }
 

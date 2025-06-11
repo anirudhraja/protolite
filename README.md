@@ -57,6 +57,58 @@ func main() {
 }
 ```
 
+## 🎯 Comprehensive Sample App
+
+**Want to see ALL protobuf features in action?** Check out our comprehensive sample app that demonstrates every advanced protobuf feature:
+
+```bash
+cd sampleapp/
+go run main.go
+```
+
+**🚀 Features Demonstrated:**
+- ✅ **oneof fields** - Union types (contact_method, content types, notification_data)
+- ✅ **Nested messages** - Deep nesting (User → Address → Coordinates)
+- ✅ **Nested repeated** - Comments with recursive replies structure
+- ✅ **Multiple map types** - string→string, string→int64, int32→string, string→Message
+- ✅ **Comprehensive enums** - 12+ different enum types with proper scoping
+- ✅ **Recursive structures** - Comments containing nested replies infinitely deep
+
+**📁 Sample App Structure:**
+```
+sampleapp/
+├── main.go                    # Comprehensive demo application
+└── testdata/
+    ├── user.proto            # Advanced User message with all features
+    └── post.proto            # Complex Post message with oneof, maps, recursion
+```
+
+**📊 Sample Output:**
+```
+=== Comprehensive Protobuf Demo ===
+✅ oneof fields (contact_method, content, notification_data, comment_type)
+✅ Nested messages (Address -> Coordinates, deep nesting)  
+✅ Nested repeated (notifications, comments with recursive replies)
+✅ Multiple map types (string->string, string->int64, int32->string, string->Message)
+✅ Comprehensive enums (12+ different enum types)
+✅ Recursive structures (Reply -> nested_replies)
+
+Marshaling comprehensive user data...
+✅ Encoded data size: 419 bytes
+
+✅ User: John Doe (ID: 1)
+✅ Nested Address: San Francisco, CA
+✅ Deeply nested Coordinates: 37.7749, -122.4194
+✅ Posts: 1 items
+✅ Comments in first post: 1 items
+✅ Replies in first comment: 1 items
+✅ Nested replies (recursive): 1 items
+
+🎉 Comprehensive Protobuf demo completed successfully!
+```
+
+The sample app is the **perfect reference** for implementing complex protobuf schemas with Protolite!
+
 ## 📖 API Reference
 
 ### Core Interface
@@ -295,13 +347,6 @@ message Address {
 - **No proto2 extensions** - Focus on proto3 features
 - **Reflection overhead** - Struct mapping uses reflection
 
-### 📊 Benchmarks
-```
-BenchmarkParse-8                   100000    10234 ns/op
-BenchmarkUnmarshalWithSchema-8      50000    23456 ns/op  
-BenchmarkUnmarshalToStruct-8        30000    34567 ns/op
-```
-
 ---
 
 ## 🧪 Testing
@@ -332,11 +377,14 @@ go test -cover ./...
 
 ## 🚀 Examples
 
-Check out the `example_test.go` file for comprehensive usage examples:
+Check out the comprehensive **sample app** for advanced usage examples:
 
 ```bash
-go test -v . -run Example
+cd sampleapp/
+go run main.go
 ```
+
+The sample app demonstrates all protobuf features including oneof, nested messages, maps, enums, and recursive structures!
 
 ---
 

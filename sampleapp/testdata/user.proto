@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package blog;
+
+import "post.proto";
+
+message User {
+    int32 id = 1;
+    string name = 2;
+    bool active = 4;
+    UserStatus status = 5;
+    repeated Post posts = 6;  // User has many posts
+    map<string, string> metadata = 7;  // Simple string map
+    int64 created_at = 8;
+    
+    // Nested message
+    Address address = 9;
+    
+    // oneof for contact methods
+    oneof contact_method {
+        string email = 10;
+        string phone = 11;
+        SocialMedia social_media = 12;
+    }
+    
+    // Different map types
+    map<string, int64> statistics = 13;        // views, likes, followers count
+    map<int32, string> preferences = 14;       // settings by preference ID
+    map<string, UserProfile> profiles = 15;    // social profiles by platform
+    
+    // Repeated nested messages
+    repeated Notification notifications = 16;
+    
+    UserType user_type = 17;
+}
+
+// Nested message within User
+message Address {
+    string street = 1;
+    string city = 2;
+    string state = 3;
+    string country = 4;
+    string postal_code = 5;
+    AddressType type = 6;
+    
+    // Nested coordinates
+    Coordinates coordinates = 7;
+}
+
+// Deeply nested message
+message Coordinates {
+    double latitude = 1;
+    double longitude = 2;
+    CoordinateSystem system = 3;
+}
+
+// Another nested message for oneof
+message SocialMedia {
+    string platform = 1;  // "twitter", "linkedin", etc.
+    string handle = 2;
+    bool verified = 3;
+    int32 followers = 4;
+}
+
+// Nested message for map values
+message UserProfile {
+    string display_name = 1;
+    string bio = 2;
+    string avatar_url = 3;
+    ProfileVisibility visibility = 4;
+    repeated string interests = 5;  // nested repeated in map value
+}
+
+// Nested repeated message
+message Notification {
+    int32 id = 1;
+    string title = 2;
+    string message = 3;
+    NotificationType type = 4;
+    int64 timestamp = 5;
+    bool read = 6;
+    
+    // oneof for notification data
+    oneof notification_data {
+        PostNotificationData post_data = 7;
+        UserNotificationData user_data = 8;
+        SystemNotificationData system_data = 9;
+    }
+}
+
+// Nested messages for notification oneof
+message PostNotificationData {
+    int32 post_id = 1;
+    string post_title = 2;
+    string action = 3;  // "liked", "commented", "shared"
+}
+
+message UserNotificationData {
+    int32 user_id = 1;
+    string username = 2;
+    string action = 3;  // "followed", "mentioned"
+}
+
+message SystemNotificationData {
+    string system_message = 1;
+    string action_url = 2;
+    SystemPriority priority = 3;
+}
+
+// Enums
+enum UserStatus {
+    USER_UNKNOWN = 0;
+    USER_ACTIVE = 1;
+    USER_INACTIVE = 2;
+    USER_SUSPENDED = 3;
+    USER_PENDING_VERIFICATION = 4;
+}
+
+enum UserType {
+    USER_TYPE_REGULAR = 0;
+    USER_TYPE_PREMIUM = 1;
+    USER_TYPE_ADMIN = 2;
+    USER_TYPE_MODERATOR = 3;
+    USER_TYPE_GUEST = 4;
+}
+
+enum AddressType {
+    ADDRESS_HOME = 0;
+    ADDRESS_WORK = 1;
+    ADDRESS_BILLING = 2;
+    ADDRESS_SHIPPING = 3;
+    ADDRESS_OTHER = 4;
+}
+
+enum CoordinateSystem {
+    COORD_WGS84 = 0;
+    COORD_UTM = 1;
+    COORD_MERCATOR = 2;
+}
+
+enum ProfileVisibility {
+    PROFILE_PUBLIC = 0;
+    PROFILE_PRIVATE = 1;
+    PROFILE_FRIENDS_ONLY = 2;
+    PROFILE_RESTRICTED = 3;
+}
+
+enum NotificationType {
+    NOTIF_INFO = 0;
+    NOTIF_WARNING = 1;
+    NOTIF_ERROR = 2;
+    NOTIF_SUCCESS = 3;
+    NOTIF_SOCIAL = 4;
+    NOTIF_SYSTEM = 5;
+}
+
+enum SystemPriority {
+    PRIORITY_LOW = 0;
+    PRIORITY_MEDIUM = 1;
+    PRIORITY_HIGH = 2;
+    PRIORITY_CRITICAL = 3;
+} 
