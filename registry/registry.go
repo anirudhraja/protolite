@@ -266,13 +266,9 @@ func (r *Registry) parseField(line string) (*schema.Field, error) {
 	if parts[0] == "repeated" {
 		label = schema.LabelRepeated
 		fieldIndex = 1
-	} else if parts[0] == "map" {
+	} else if parts[0] == "map" || strings.HasPrefix(line, "map<") {
 		// Handle map<key, value> field_name = number;
 		return r.parseMapField(line)
-	}
-
-	if len(parts) <= fieldIndex+2 {
-		return nil, nil
 	}
 
 	fieldType := parts[fieldIndex]
