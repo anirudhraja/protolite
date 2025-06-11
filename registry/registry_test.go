@@ -945,3 +945,102 @@ func TestResolveMessageFields_PrimitiveTypes(t *testing.T) {
 		t.Errorf("resolveMessageFields failed for primitive types: %v", err)
 	}
 }
+
+func TestGetMessage_AmbiguityDetection(t *testing.T) {
+	registry := NewRegistry()
+	registry.messages = make(map[string]*schema.Message)
+
+	// Setup conflicting message names
+	registry.messages["com.example.User"] = &schema.Message{Name: "User"}
+	registry.messages["com.other.User"] = &schema.Message{Name: "User"}
+	registry.messages["internal.auth.User"] = &schema.Message{Name: "User"}
+	registry.messages["Product"] = &schema.Message{Name: "Product"} // Unique name
+
+	t.Run("fully_qualified_name_exact_match", func(t *testing.T) {
+		msg, err := registry.GetMessage("com.example.User")
+		if err != nil {
+			t.Errorf("Unexpected error for fully qualified name: %v", err)
+		}
+		if msg == nil {
+			t.Error("Expected message, got nil")
+		}
+	})
+
+	t.Run("unique_short_name_success", func(t *testing.T) {
+		msg, err := registry.GetMessage("Product")
+		if err != nil {
+			t.Errorf("Unexpected error for unique short name: %v", err)
+		}
+		if msg == nil || msg.Name != "Product" {
+			t.Error("Expected Product message")
+		}
+	})
+
+	t.Run("ambiguous_short_name_error", func(t *testing.T) {
+		_, err := registry.GetMessage("User")
+		if err == nil {
+			t.Error("Expected error for ambiguous short name")
+		}
+
+		expectedStrings := []string{"ambiguous", "User", "com.example.User", "com.other.User", "internal.auth.User"}
+		for _, expected := range expectedStrings {
+			if !contains(err.Error(), expected) {
+				t.Errorf("Error message should contain '%s', got: %v", expected, err.Error())
+			}
+		}
+	})
+
+	t.Run("nonexistent_name_error", func(t *testing.T) {
+		_, err := registry.GetMessage("NonExistent")
+		if err == nil {
+			t.Error("Expected error for non-existent message")
+		}
+		if !contains(err.Error(), "message not found") {
+			t.Errorf("Expected 'message not found' error, got: %v", err.Error())
+		}
+	})
+}
+
+func TestGetEnum_AmbiguityDetection(t *testing.T) {
+	registry := NewRegistry()
+	registry.enums = make(map[string]*schema.Enum)
+
+	// Setup conflicting enum names
+	registry.enums["com.example.Status"] = &schema.Enum{Name: "Status"}
+	registry.enums["com.other.Status"] = &schema.Enum{Name: "Status"}
+	registry.enums["Priority"] = &schema.Enum{Name: "Priority"} // Unique name
+
+	t.Run("fully_qualified_name_exact_match", func(t *testing.T) {
+		enum, err := registry.GetEnum("com.example.Status")
+		if err != nil {
+			t.Errorf("Unexpected error for fully qualified name: %v", err)
+		}
+		if enum == nil {
+			t.Error("Expected enum, got nil")
+		}
+	})
+
+	t.Run("unique_short_name_success", func(t *testing.T) {
+		enum, err := registry.GetEnum("Priority")
+		if err != nil {
+			t.Errorf("Unexpected error for unique short name: %v", err)
+		}
+		if enum == nil || enum.Name != "Priority" {
+			t.Error("Expected Priority enum")
+		}
+	})
+
+	t.Run("ambiguous_short_name_error", func(t *testing.T) {
+		_, err := registry.GetEnum("Status")
+		if err == nil {
+			t.Error("Expected error for ambiguous short name")
+		}
+
+		expectedStrings := []string{"ambiguous", "Status", "com.example.Status", "com.other.Status"}
+		for _, expected := range expectedStrings {
+			if !contains(err.Error(), expected) {
+				t.Errorf("Error message should contain '%s', got: %v", expected, err.Error())
+			}
+		}
+	})
+}
