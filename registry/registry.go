@@ -677,51 +677,94 @@ func (r *Registry) getFullName(pkg, name string) string {
 }
 
 // GetMessage retrieves a message definition by name
+// Supports both fully qualified names (com.example.User) and short names (User)
+// For short names, returns error if multiple matches found (ambiguous)
 func (r *Registry) GetMessage(name string) (*schema.Message, error) {
+	// First: try exact match (fully qualified or already unique)
 	if msg, exists := r.messages[name]; exists {
 		return msg, nil
 	}
 
-	// Try without package prefix
+	// Second: try short name resolution with ambiguity detection
+	var matches []*schema.Message
+	var matchedNames []string
+
 	for fullName, msg := range r.messages {
-		if strings.HasSuffix(fullName, "."+name) || fullName == name {
-			return msg, nil
+		if strings.HasSuffix(fullName, "."+name) {
+			matches = append(matches, msg)
+			matchedNames = append(matchedNames, fullName)
 		}
 	}
 
-	return nil, fmt.Errorf("message not found: %s", name)
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("message not found: %s", name)
+	case 1:
+		return matches[0], nil
+	default:
+		return nil, fmt.Errorf("ambiguous message name '%s' matches multiple: %v. Use fully qualified name",
+			name, matchedNames)
+	}
 }
 
 // GetEnum retrieves an enum definition by name
+// Supports both fully qualified names and short names with ambiguity detection
 func (r *Registry) GetEnum(name string) (*schema.Enum, error) {
+	// First: try exact match (fully qualified or already unique)
 	if enum, exists := r.enums[name]; exists {
 		return enum, nil
 	}
 
-	// Try without package prefix
+	// Second: try short name resolution with ambiguity detection
+	var matches []*schema.Enum
+	var matchedNames []string
+
 	for fullName, enum := range r.enums {
-		if strings.HasSuffix(fullName, "."+name) || fullName == name {
-			return enum, nil
+		if strings.HasSuffix(fullName, "."+name) {
+			matches = append(matches, enum)
+			matchedNames = append(matchedNames, fullName)
 		}
 	}
 
-	return nil, fmt.Errorf("enum not found: %s", name)
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("enum not found: %s", name)
+	case 1:
+		return matches[0], nil
+	default:
+		return nil, fmt.Errorf("ambiguous enum name '%s' matches multiple: %v. Use fully qualified name",
+			name, matchedNames)
+	}
 }
 
 // GetService retrieves a service definition by name
+// Supports both fully qualified names and short names with ambiguity detection
 func (r *Registry) GetService(name string) (*schema.Service, error) {
+	// First: try exact match (fully qualified or already unique)
 	if service, exists := r.services[name]; exists {
 		return service, nil
 	}
 
-	// Try without package prefix
+	// Second: try short name resolution with ambiguity detection
+	var matches []*schema.Service
+	var matchedNames []string
+
 	for fullName, service := range r.services {
-		if strings.HasSuffix(fullName, "."+name) || fullName == name {
-			return service, nil
+		if strings.HasSuffix(fullName, "."+name) {
+			matches = append(matches, service)
+			matchedNames = append(matchedNames, fullName)
 		}
 	}
 
-	return nil, fmt.Errorf("service not found: %s", name)
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("service not found: %s", name)
+	case 1:
+		return matches[0], nil
+	default:
+		return nil, fmt.Errorf("ambiguous service name '%s' matches multiple: %v. Use fully qualified name",
+			name, matchedNames)
+	}
 }
 
 // ListMessages returns all registered message names
