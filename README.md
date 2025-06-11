@@ -357,13 +357,3 @@ go test -v . -run Example
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-
-## 🙏 Acknowledgments
-
-- Protocol Buffers team for the excellent wire format specification
-- Go team for powerful reflection capabilities
-- Contributors and testers who helped make this library robust
-
----
-
-**Happy protobuffing! 🎉**

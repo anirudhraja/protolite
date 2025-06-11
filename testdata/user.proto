@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package blog;
+
+import "post.proto";
+
+message User {
+    int32 id = 1;
+    string name = 2;
+    string email = 3;
+    bool active = 4;
+    UserStatus status = 5;
+    repeated Post posts = 6;  // User has many posts
+    map<string, string> metadata = 7;
+    int64 created_at = 8;
+}
+
+enum UserStatus {
+    UNKNOWN = 0;
+    ACTIVE = 1;
+    INACTIVE = 2;
+    SUSPENDED = 3;
+} 
