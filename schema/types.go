@@ -25,13 +25,31 @@ type Import struct {
 
 // Message represents a protobuf message definition
 type Message struct {
-	Name        string     `json:"name"`         // "User"
-	Fields      []*Field   `json:"fields"`       // message fields
-	NestedTypes []*Message `json:"nested_types"` // nested messages
-	NestedEnums []*Enum    `json:"nested_enums"` // nested enums
-	Extensions  []*Field   `json:"extensions"`   // extension fields
-	OneofGroups []*Oneof   `json:"oneof_groups"` // oneof groups
-	MapEntry    bool       `json:"map_entry"`    // is this a map entry?
+	Name        string           `json:"name"`         // "User"
+	Fields      []*Field         `json:"fields"`       // message fields
+	NestedTypes []*Message       `json:"nested_types"` // nested messages
+	NestedEnums []*Enum          `json:"nested_enums"` // nested enums
+	Extensions  []*Field         `json:"extensions"`   // extension fields
+	OneofGroups []*Oneof         `json:"oneof_groups"` // oneof groups
+	MapEntry    bool             `json:"map_entry"`    // is this a map entry?
+	fieldMap    map[int32]*Field // O(1) lookup map
+}
+
+// BuildFieldMap creates the field lookup map for O(1) field access.
+// This should be called once when the schema is loaded.
+func (m *Message) BuildFieldMap() {
+	if m.fieldMap == nil {
+		m.fieldMap = make(map[int32]*Field, len(m.Fields))
+		for _, field := range m.Fields {
+			m.fieldMap[field.Number] = field
+		}
+	}
+}
+
+// GetFieldByNumber returns a field by its number using the O(1) map.
+func (m *Message) GetFieldByNumber(fieldNumber int32) *Field {
+	// Assumes BuildFieldMap() has already been called.
+	return m.fieldMap[fieldNumber]
 }
 
 // Field represents a message field

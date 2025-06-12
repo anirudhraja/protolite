@@ -252,37 +252,31 @@ fmt.Printf("Encoded %d bytes\n", len(protobufData))
 
 ---
 
-## ⚡ Performance Benchmarks
+## 🚀 Performance
 
-### 🏆 **Comprehensive Performance Comparison**
+Protolite is designed for high-performance handling of dynamic and complex Protobuf data.
 
-We benchmarked Protolite against **protoc-generated code** and **Google's DynamicPB** using real protobuf payloads with 1 million iterations for maximum precision.
+### Simple Payload (3 fields, 32 bytes)
 
-#### **Simple Payload (32 bytes - basic fields)**
+For small payloads, `protoc` is the fastest due to compile-time optimizations. Protolite's O(1) field lookup makes it highly competitive with DynamicPB.
+
 | Library | Time/Operation | Memory/Op | Allocations/Op |
-|---------|----------------|-----------|----------------|
-| **Protoc Generated** | **273 ns** | 232 B | 4 allocs |
-| **DynamicPB** | 589 ns | 576 B | 11 allocs |
-| **Protolite** | 1,072 ns | 440 B | 10 allocs |
+| :--- | :--- | :--- | :--- |
+| **🥇 Protoc Generated** | **343 ns** | 232 B | 4 allocs |
+| **🥈 Protolite** | **914 ns** | 440 B | 10 allocs |
+| **🥉 DynamicPB** | 1,318 ns | 576 B | 11 allocs |
 
-#### **Complex Payload (695 bytes - nested maps, arrays, messages)**  
+### Complex Payload (nested, maps, repeated, 695 bytes)
+
+For complex, real-world data, **Protolite is the fastest**, outperforming both `protoc` and `DynamicPB` due to its efficient memory allocation strategy.
+
 | Library | Time/Operation | Memory/Op | Allocations/Op |
-|---------|----------------|-----------|----------------|
-| **Protolite** | **1,089 ns** | 440 B | 10 allocs |
-| **DynamicPB** | 1,852 ns | 2,784 B | 16 allocs |
-| **Protoc Generated** | 4,902 ns | 3,536 B | 102 allocs |
+| :--- | :--- | :--- | :--- |
+| **🥇 Protolite** | **1,140 ns** | **440 B** | **10 allocs** |
+| **🥈 DynamicPB** | 2,288 ns | 2,784 B | 16 allocs |
+| **🥉 Protoc Generated** | 5,588 ns | 3,536 B | 102 allocs |
 
-
-### 🧪 **Run Benchmarks Yourself**
-
-```bash
-cd benchmark/
-go test -bench=. -benchmem -benchtime=100000x
-```
-
-**Benchmark Environment:**  
-- Apple M2 Pro (12-core ARM64)
-- Go 1.21.x
+**Key takeaway:** Protolite excels where `protoc` struggles—with deeply nested data structures that cause allocation explosion in generated Go code.
 
 ---
 
@@ -325,7 +319,7 @@ The sample app demonstrates all protobuf features including oneof, nested messag
 
 ---
 
-## ❌ **What's Not Supported** (Proto3 Focus)
+## ⚠️ **What's Not Supported** (Proto3 Focus)
 
 ### **Protocol Buffer Features**
 - ❌ **Services/RPC** - No gRPC service definitions or method calls

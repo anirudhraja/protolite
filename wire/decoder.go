@@ -52,14 +52,8 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 
 		fieldNumber, wireType := ParseTag(Tag(tag))
 
-		// Find field in schema
-		var field *schema.Field
-		for _, f := range msg.Fields {
-			if f.Number == int32(fieldNumber) {
-				field = f
-				break
-			}
-		}
+		// Find field in schema using the optimized O(1) map lookup
+		field := msg.GetFieldByNumber(int32(fieldNumber))
 
 		if field == nil {
 			// Unknown field - skip it
