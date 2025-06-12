@@ -165,6 +165,7 @@ func (r *Registry) parseProtoContent(content string, protoFile *schema.ProtoFile
 			if err != nil {
 				return err
 			}
+			message.BuildFieldMap() // Eagerly build the field map for O(1) lookups
 			protoFile.Messages = append(protoFile.Messages, message)
 			i = newIndex
 			continue
