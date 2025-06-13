@@ -216,7 +216,7 @@ func BenchmarkSimple_Protolite(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		result, err := protoliteClient.UnmarshalWithSchema(simplePayload, "User")
+		result, err := protoliteClient.UnmarshalWithSchema(simplePayload, "benchmark.User")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -272,7 +272,7 @@ func BenchmarkComplex_Protolite(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		result, err := protoliteClient.UnmarshalWithSchema(complexPayload, "User")
+		result, err := protoliteClient.UnmarshalWithSchema(complexPayload, "benchmark.User")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -330,7 +330,7 @@ func TestBenchmarkVerification(t *testing.T) {
 	// Verify simple payload
 	t.Log("\n🔍 SIMPLE PAYLOAD VERIFICATION:")
 
-	result1, err := protoliteClient.UnmarshalWithSchema(simplePayload, "User")
+	result1, err := protoliteClient.UnmarshalWithSchema(simplePayload, "benchmark.User")
 	if err != nil {
 		t.Errorf("Protolite simple failed: %v", err)
 	} else {
@@ -356,7 +356,7 @@ func TestBenchmarkVerification(t *testing.T) {
 	// Verify complex payload
 	t.Log("\n🔍 COMPLEX PAYLOAD VERIFICATION:")
 
-	result4, err := protoliteClient.UnmarshalWithSchema(complexPayload, "User")
+	result4, err := protoliteClient.UnmarshalWithSchema(complexPayload, "benchmark.User")
 	if err != nil {
 		t.Errorf("Protolite complex failed: %v", err)
 	} else {
@@ -381,9 +381,13 @@ func TestBenchmarkVerification(t *testing.T) {
 	}
 }
 
-func BenchmarkCompare_100K(b *testing.B) {
-	const N = 100000
-	b.Logf("Running each decode 100,000 times\n")
+// BenchmarkCompare_1K runs comprehensive allocation benchmarks with 1000 iterations.
+// This provides meaningful results while keeping the test duration reasonable.
+// The benchmark compares Protolite, Protoc-generated code, and DynamicPB
+// for both simple and complex payloads.
+func BenchmarkCompare_1K(b *testing.B) {
+	const N = 1000
+	b.Logf("Running each decode %d times\n", N)
 
 	// --- SIMPLE PAYLOAD ---
 	b.Log("\n--- SIMPLE PAYLOAD ---")
@@ -391,7 +395,7 @@ func BenchmarkCompare_100K(b *testing.B) {
 	b.StartTimer()
 	start := testing.AllocsPerRun(N, func() {
 		for i := 0; i < N; i++ {
-			_, err := protoliteClient.UnmarshalWithSchema(simplePayload, "User")
+			_, err := protoliteClient.UnmarshalWithSchema(simplePayload, "benchmark.User")
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -432,7 +436,7 @@ func BenchmarkCompare_100K(b *testing.B) {
 	b.StartTimer()
 	start = testing.AllocsPerRun(N, func() {
 		for i := 0; i < N; i++ {
-			_, err := protoliteClient.UnmarshalWithSchema(complexPayload, "User")
+			_, err := protoliteClient.UnmarshalWithSchema(complexPayload, "benchmark.User")
 			if err != nil {
 				b.Fatal(err)
 			}
