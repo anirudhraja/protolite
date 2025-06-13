@@ -1,5 +1,9 @@
 # 🚀 Protolite
 
+[![CI](https://github.com/anirudhraja/protolite/actions/workflows/ci.yml/badge.svg)](https://github.com/anirudhraja/protolite/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/anirudhraja/protolite)](https://goreportcard.com/report/github.com/anirudhraja/protolite)
+[![Go Reference](https://pkg.go.dev/badge/github.com/anirudhraja/protolite.svg)](https://pkg.go.dev/github.com/anirudhraja/protolite)
+
 A powerful Go library for working with Protocol Buffers **without generated code**. Protolite provides schema-less parsing, schema-based marshaling/unmarshaling, and automatic Go struct mapping with reflection.
 
 ## ✨ Features
@@ -254,7 +258,7 @@ fmt.Printf("Encoded %d bytes\n", len(protobufData))
 
 ## 📊 Performance Benchmarks
 
-Comparison of different approaches for handling Protocol Buffers in Go:
+Comparison of unmarshalling in different approaches:
 
 ### Simple Payload (32 bytes)
 Basic message with primitive fields (id, name, email, active status).
