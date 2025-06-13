@@ -252,37 +252,31 @@ fmt.Printf("Encoded %d bytes\n", len(protobufData))
 
 ---
 
-## ⚡ Performance Benchmarks
+## 📊 Performance Benchmarks
 
-### 🏆 **Comprehensive Performance Comparison**
+Comparison of different approaches for handling Protocol Buffers in Go:
 
-We benchmarked Protolite against **protoc-generated code** and **Google's DynamicPB** using real protobuf payloads with 1 million iterations for maximum precision.
+### Simple Payload (32 bytes)
+Basic message with primitive fields (id, name, email, active status).
 
-#### **Simple Payload (32 bytes - basic fields)**
-| Library | Time/Operation | Memory/Op | Allocations/Op |
-|---------|----------------|-----------|----------------|
-| **Protoc Generated** | **273 ns** | 232 B | 4 allocs |
-| **DynamicPB** | 589 ns | 576 B | 11 allocs |
-| **Protolite** | 1,072 ns | 440 B | 10 allocs |
+| Method | Time (ns/op) | Memory (B/op) | Allocs/op |
+|--------|-------------|---------------|------------|
+| Protolite | 919.5 | 440 | 10 |
+| Protoc (generated) | 436.8 | 232 | 4 |
+| DynamicPB (static) | 973.1 | 576 | 11 |
+| DynamicPB (runtime) | 945.7 | 632 | 13 |
 
-#### **Complex Payload (695 bytes - nested maps, arrays, messages)**  
-| Library | Time/Operation | Memory/Op | Allocations/Op |
-|---------|----------------|-----------|----------------|
-| **Protolite** | **1,089 ns** | 440 B | 10 allocs |
-| **DynamicPB** | 1,852 ns | 2,784 B | 16 allocs |
-| **Protoc Generated** | 4,902 ns | 3,536 B | 102 allocs |
+### Complex Payload (695 bytes)
+Nested message with maps, repeated fields, oneofs, and enums.
 
+| Method | Time (ns/op) | Memory (B/op) | Allocs/op |
+|--------|-------------|---------------|------------|
+| Protolite | 1,183 | 440 | 10 |
+| Protoc (generated) | 4,232 | 3,536 | 102 |
+| DynamicPB (static) | 2,129 | 2,784 | 16 |
+| DynamicPB (runtime) | 20,956 | 9,632 | 177 |
 
-### 🧪 **Run Benchmarks Yourself**
-
-```bash
-cd benchmark/
-go test -bench=. -benchmem -benchtime=100000x
-```
-
-**Benchmark Environment:**  
-- Apple M2 Pro (12-core ARM64)
-- Go 1.21.x
+_Note: Benchmarks run with 100K iterations on Apple M2 Pro, Go 1.21_
 
 ---
 
@@ -325,7 +319,7 @@ The sample app demonstrates all protobuf features including oneof, nested messag
 
 ---
 
-## ❌ **What's Not Supported** (Proto3 Focus)
+## ❌ **What's Not Supported**
 
 ### **Protocol Buffer Features**
 - ❌ **Services/RPC** - No gRPC service definitions or method calls
@@ -340,17 +334,6 @@ The sample app demonstrates all protobuf features including oneof, nested messag
 - ❌ **google.protobuf.FieldMask** - Field selection masks
 - ❌ **google.protobuf.Struct** - Dynamic JSON-like structures
 - ❌ **google.protobuf.Empty** - Empty message type
-
-### **Advanced Wire Format**
-- ❌ **Packed Repeated Optimization** - Packed encoding for repeated primitives
-- ❌ **Unknown Field Preservation** - Unknown fields are skipped, not preserved
-
-### **Schema Features**
-- ❌ **Nested Type Definitions** - Messages/enums defined inside other messages
-- ❌ **Reserved Fields** - Reserved field numbers and names not validated
-- ❌ **Deprecated Fields** - No deprecation warnings or handling
-- ❌ **Multi-file Type Resolution** - Complex cross-file imports may not resolve
-- ❌ **JSON Mapping Options** - Custom JSON field names beyond basic conversion
 
 ### **Performance Optimizations**
 - ❌ **Zero-Copy Parsing** - All data is copied during parsing
@@ -375,5 +358,3 @@ The sample app demonstrates all protobuf features including oneof, nested messag
 ## 📄 License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
----
