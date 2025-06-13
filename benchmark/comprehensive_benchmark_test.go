@@ -3,13 +3,16 @@ package benchmark
 import (
 	"testing"
 
-	"github.com/protolite"
+	"context"
+
+	"github.com/bufbuild/protocompile"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 
+	"github.com/protolite"
 	pb "github.com/protolite/benchmark/generated"
 )
 
@@ -25,10 +28,14 @@ var (
 
 	// Protolite client
 	protoliteClient protolite.Protolite
+
+	runtimeSimpleDescriptor  protoreflect.MessageDescriptor
+	runtimeComplexDescriptor protoreflect.MessageDescriptor
 )
 
 func init() {
 	setupBenchmarkData()
+	loadRuntimeDescriptors()
 }
 
 func setupBenchmarkData() {
@@ -38,7 +45,7 @@ func setupBenchmarkData() {
 	protoliteClient = protolite.NewProtolite()
 	err = protoliteClient.LoadSchemaFromFile("proto/user.proto")
 	if err != nil {
-		panic("Failed to load user schema: " + err.Error())
+		panic("Failed to load schema: " + err.Error())
 	}
 	err = protoliteClient.LoadSchemaFromFile("proto/post.proto")
 	if err != nil {
@@ -187,6 +194,21 @@ func setupDynamicDescriptors() {
 	complexDescriptor = simpleDescriptor // Use same descriptor for complex (simplified for DynamicPB)
 }
 
+func loadRuntimeDescriptors() {
+	compiler := protocompile.Compiler{
+		Resolver: &protocompile.SourceResolver{
+			ImportPaths: []string{"proto"},
+		},
+	}
+	files, err := compiler.Compile(context.Background(), "user.proto", "post.proto")
+	if err != nil {
+		panic("Failed to compile proto files: " + err.Error())
+	}
+	fileDesc := files[0]
+	runtimeSimpleDescriptor = fileDesc.Messages().ByName("User")
+	runtimeComplexDescriptor = runtimeSimpleDescriptor // For this benchmark, use the same
+}
+
 // ===== SIMPLE PAYLOAD BENCHMARKS =====
 
 func BenchmarkSimple_Protolite(b *testing.B) {
@@ -230,6 +252,19 @@ func BenchmarkSimple_DynamicPB(b *testing.B) {
 	}
 }
 
+func BenchmarkSimple_DynamicPB_RuntimeDesc(b *testing.B) {
+	b.ReportMetric(float64(len(simplePayload)), "payload_bytes")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		message := dynamicpb.NewMessage(runtimeSimpleDescriptor)
+		err := proto.Unmarshal(simplePayload, message)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_ = message
+	}
+}
+
 // ===== COMPLEX PAYLOAD BENCHMARKS =====
 
 func BenchmarkComplex_Protolite(b *testing.B) {
@@ -265,6 +300,19 @@ func BenchmarkComplex_DynamicPB(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		message := dynamicpb.NewMessage(complexDescriptor)
+		err := proto.Unmarshal(complexPayload, message)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_ = message
+	}
+}
+
+func BenchmarkComplex_DynamicPB_RuntimeDesc(b *testing.B) {
+	b.ReportMetric(float64(len(complexPayload)), "payload_bytes")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		message := dynamicpb.NewMessage(runtimeComplexDescriptor)
 		err := proto.Unmarshal(complexPayload, message)
 		if err != nil {
 			b.Fatal(err)
@@ -331,4 +379,91 @@ func TestBenchmarkVerification(t *testing.T) {
 	} else {
 		t.Logf("✅ DynamicPB: Message decoded")
 	}
+}
+
+func BenchmarkCompare_100K(b *testing.B) {
+	const N = 100000
+	b.Logf("Running each decode 100,000 times\n")
+
+	// --- SIMPLE PAYLOAD ---
+	b.Log("\n--- SIMPLE PAYLOAD ---")
+
+	b.StartTimer()
+	start := testing.AllocsPerRun(N, func() {
+		for i := 0; i < N; i++ {
+			_, err := protoliteClient.UnmarshalWithSchema(simplePayload, "User")
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.StopTimer()
+	b.Logf("Protolite.UnmarshalWithSchema: %d allocs/op", int(start))
+
+	b.StartTimer()
+	start = testing.AllocsPerRun(N, func() {
+		for i := 0; i < N; i++ {
+			user := &pb.User{}
+			err := proto.Unmarshal(simplePayload, user)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.StopTimer()
+	b.Logf("Protoc-generated Unmarshal: %d allocs/op", int(start))
+
+	b.StartTimer()
+	start = testing.AllocsPerRun(N, func() {
+		for i := 0; i < N; i++ {
+			msg := dynamicpb.NewMessage(runtimeSimpleDescriptor)
+			err := proto.Unmarshal(simplePayload, msg)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.StopTimer()
+	b.Logf("DynamicPB (runtime desc): %d allocs/op", int(start))
+
+	// --- COMPLEX PAYLOAD ---
+	b.Log("\n--- COMPLEX PAYLOAD ---")
+
+	b.StartTimer()
+	start = testing.AllocsPerRun(N, func() {
+		for i := 0; i < N; i++ {
+			_, err := protoliteClient.UnmarshalWithSchema(complexPayload, "User")
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.StopTimer()
+	b.Logf("Protolite.UnmarshalWithSchema: %d allocs/op", int(start))
+
+	b.StartTimer()
+	start = testing.AllocsPerRun(N, func() {
+		for i := 0; i < N; i++ {
+			user := &pb.User{}
+			err := proto.Unmarshal(complexPayload, user)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.StopTimer()
+	b.Logf("Protoc-generated Unmarshal: %d allocs/op", int(start))
+
+	b.StartTimer()
+	start = testing.AllocsPerRun(N, func() {
+		for i := 0; i < N; i++ {
+			msg := dynamicpb.NewMessage(runtimeComplexDescriptor)
+			err := proto.Unmarshal(complexPayload, msg)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.StopTimer()
+	b.Logf("DynamicPB (runtime desc): %d allocs/op", int(start))
 }
