@@ -685,26 +685,32 @@ func (r *Registry) GetMessage(name string) (*schema.Message, error) {
 		return msg, nil
 	}
 
-	// Second: try short name resolution with ambiguity detection
-	var matches []*schema.Message
-	var matchedNames []string
+	// If name contains a dot, it's a fully qualified name that doesn't exist
+	if strings.Contains(name, ".") {
+		return nil, fmt.Errorf("message not found: %s", name)
+	}
+
+	// For short names, use a more efficient lookup
+	var match *schema.Message
+	var foundCount int
 
 	for fullName, msg := range r.messages {
-		if strings.HasSuffix(fullName, "."+name) {
-			matches = append(matches, msg)
-			matchedNames = append(matchedNames, fullName)
+		// Check if the name matches the last component of the full name
+		if strings.HasSuffix(fullName, "."+name) || fullName == name {
+			match = msg
+			foundCount++
+			if foundCount > 1 {
+				// Early exit on ambiguity
+				return nil, fmt.Errorf("ambiguous message name '%s' matches multiple messages. Use fully qualified name", name)
+			}
 		}
 	}
 
-	switch len(matches) {
-	case 0:
+	if match == nil {
 		return nil, fmt.Errorf("message not found: %s", name)
-	case 1:
-		return matches[0], nil
-	default:
-		return nil, fmt.Errorf("ambiguous message name '%s' matches multiple: %v. Use fully qualified name",
-			name, matchedNames)
 	}
+
+	return match, nil
 }
 
 // GetEnum retrieves an enum definition by name
