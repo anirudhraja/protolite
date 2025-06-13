@@ -196,9 +196,7 @@ func (r *Registry) parseMessage(lines []string, startIndex int) (*schema.Message
 	}
 
 	messageName := parts[1]
-	if strings.HasSuffix(messageName, "{") {
-		messageName = strings.TrimSuffix(messageName, "{")
-	}
+	messageName = strings.TrimSuffix(messageName, "{")
 	messageName = strings.TrimSpace(messageName)
 
 	message := &schema.Message{
@@ -383,9 +381,7 @@ func (r *Registry) parseEnum(lines []string, startIndex int) (*schema.Enum, int,
 	}
 
 	enumName := parts[1]
-	if strings.HasSuffix(enumName, "{") {
-		enumName = strings.TrimSuffix(enumName, "{")
-	}
+	enumName = strings.TrimSuffix(enumName, "{")
 	enumName = strings.TrimSpace(enumName)
 
 	enum := &schema.Enum{
@@ -690,27 +686,27 @@ func (r *Registry) GetMessage(name string) (*schema.Message, error) {
 		return nil, fmt.Errorf("message not found: %s", name)
 	}
 
-	// For short names, use a more efficient lookup
-	var match *schema.Message
-	var foundCount int
+	// For short names, collect all matches
+	var matches []*schema.Message
+	var matchedNames []string
 
 	for fullName, msg := range r.messages {
 		// Check if the name matches the last component of the full name
 		if strings.HasSuffix(fullName, "."+name) || fullName == name {
-			match = msg
-			foundCount++
-			if foundCount > 1 {
-				// Early exit on ambiguity
-				return nil, fmt.Errorf("ambiguous message name '%s' matches multiple messages. Use fully qualified name", name)
-			}
+			matches = append(matches, msg)
+			matchedNames = append(matchedNames, fullName)
 		}
 	}
 
-	if match == nil {
+	switch len(matches) {
+	case 0:
 		return nil, fmt.Errorf("message not found: %s", name)
+	case 1:
+		return matches[0], nil
+	default:
+		return nil, fmt.Errorf("ambiguous message name '%s' matches multiple: %v. Use fully qualified name",
+			name, matchedNames)
 	}
-
-	return match, nil
 }
 
 // GetEnum retrieves an enum definition by name
