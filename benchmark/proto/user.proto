@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package benchmark;
 
-option go_package = "github.com/protolite/benchmark/generated";
+option go_package = "github.com/anirudhraja/protolite/benchmark/generated";
 
 import "post.proto";
 

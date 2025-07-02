@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/protolite/schema"
+	"github.com/anirudhraja/protolite/schema"
 )
 
 // Registry allows us to store the schema of the protobuf messages. We look this up when we need to parse or marshal a message.

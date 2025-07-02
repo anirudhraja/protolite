@@ -1,8 +1,8 @@
 package wire
 
 import (
-	"github.com/protolite/registry"
-	"github.com/protolite/schema"
+	"github.com/anirudhraja/protolite/registry"
+	"github.com/anirudhraja/protolite/schema"
 )
 
 // Encoder handles low-level protobuf wire format encoding

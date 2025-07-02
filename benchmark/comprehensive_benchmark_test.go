@@ -12,8 +12,8 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 
-	"github.com/protolite"
-	pb "github.com/protolite/benchmark/generated"
+	"github.com/anirudhraja/protolite"
+	pb "github.com/anirudhraja/protolite/benchmark/generated"
 )
 
 // Global test data and clients
