@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/protolite/schema"
+	"github.com/anirudhraja/protolite/schema"
 )
 
 func TestNewRegistry(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/protolite"
+	"github.com/anirudhraja/protolite"
 )
 
 func main() {

@@ -3,7 +3,7 @@ package wire
 import (
 	"fmt"
 
-	"github.com/protolite/schema"
+	"github.com/anirudhraja/protolite/schema"
 )
 
 // MapDecoder handles map decoding operations

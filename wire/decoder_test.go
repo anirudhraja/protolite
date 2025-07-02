@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/protolite/registry"
-	"github.com/protolite/schema"
+	"github.com/anirudhraja/protolite/registry"
+	"github.com/anirudhraja/protolite/schema"
 )
 
 func TestDecoder_AllTypes(t *testing.T) {

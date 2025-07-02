@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/protolite/registry"
-	"github.com/protolite/wire"
+	"github.com/anirudhraja/protolite/registry"
+	"github.com/anirudhraja/protolite/wire"
 )
 
 // Protolite is the main interface for the library.

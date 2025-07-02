@@ -3,8 +3,8 @@ package wire
 import (
 	"fmt"
 
-	"github.com/protolite/registry"
-	"github.com/protolite/schema"
+	"github.com/anirudhraja/protolite/registry"
+	"github.com/anirudhraja/protolite/schema"
 )
 
 // Decoder handles low-level protobuf wire format decoding

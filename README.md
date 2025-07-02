@@ -18,7 +18,7 @@ A powerful Go library for working with Protocol Buffers **without generated code
 ## 📦 Installation
 
 ```bash
-go get github.com/protolite
+go get github.com/anirudhraja/protolite
 ```
 
 ## 🎯 Quick Start
@@ -28,7 +28,7 @@ package main
 
 import (
     "fmt"
-    "github.com/protolite"
+    "github.com/anirudhraja/protolite"
 )
 
 func main() {

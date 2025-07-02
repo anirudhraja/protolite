@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/protolite/schema"
-	"github.com/protolite/wire"
+	"github.com/anirudhraja/protolite/schema"
+	"github.com/anirudhraja/protolite/wire"
 )
 
 func TestProtolite_Parse(t *testing.T) {
