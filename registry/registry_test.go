@@ -142,7 +142,7 @@ func TestLoadSchema_Directory(t *testing.T) {
 	protoFiles := map[string]string{
 		filepath.Join(tmpDir, "file1.proto"): `syntax = "proto3";
 package pkg1;`,
-		filepath.Join(subDir, "file2.proto"): `syntax = "proto2";
+		filepath.Join(subDir, "file2.proto"): `syntax = "proto3";
 package pkg2;`,
 		filepath.Join(tmpDir, "notproto.txt"): "not a proto file",
 	}
@@ -554,16 +554,16 @@ func TestBuildServices(t *testing.T) {
 	}
 }
 
-func TestLoadSingleProtoFile_Proto2(t *testing.T) {
-	// Create a temporary proto2 file
+func TestLoadSingleProtoFile_Proto3(t *testing.T) {
+	// Create a temporary proto3 file
 	tmpFile, err := os.CreateTemp("", "test*.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(tmpFile.Name())
 
-	content := `syntax = "proto2";
-package test.proto2;
+	content := `syntax = "proto3";
+package test.proto3;
 
 message TestMessage {
   required string name = 1;
@@ -591,12 +591,12 @@ message TestMessage {
 		t.Fatal("Proto file not loaded")
 	}
 
-	if protoFile.Syntax != "proto2" {
-		t.Errorf("Expected syntax 'proto2', got '%s'", protoFile.Syntax)
+	if protoFile.Syntax != "proto3" {
+		t.Errorf("Expected syntax 'proto3', got '%s'", protoFile.Syntax)
 	}
 
-	if protoFile.Package != "test.proto2" {
-		t.Errorf("Expected package 'test.proto2', got '%s'", protoFile.Package)
+	if protoFile.Package != "test.proto3" {
+		t.Errorf("Expected package 'test.proto3', got '%s'", protoFile.Package)
 	}
 }
 

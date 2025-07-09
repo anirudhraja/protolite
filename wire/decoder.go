@@ -60,6 +60,14 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 				break
 			}
 		}
+		for _, f := range msg.OneofGroups {
+			for _, oneOfField := range f.Fields {
+				if oneOfField.Number == int32(fieldNumber) {
+					field = oneOfField
+					break
+				}
+			}
+		}
 
 		if field == nil {
 			// Unknown field - skip it
