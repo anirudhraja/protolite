@@ -301,6 +301,12 @@ func (me *MapEncoder) encodePrimitiveField(encoder *Encoder, value interface{}, 
 	case schema.TypeBool:
 		ve := NewVarintEncoder(encoder)
 		return ve.EncodeBool(value.(bool))
+	case schema.TypeFloat:
+		fe := NewFixedEncoder(encoder)
+		return fe.EncodeFloat32(value.(float32))
+	case schema.TypeDouble:
+		fe := NewFixedEncoder(encoder)
+		return fe.EncodeFloat64(value.(float64))
 	default:
 		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
 	}

@@ -213,8 +213,11 @@ func (r *Registry) parseMessage(lines []string, startIndex int) (*schema.Message
 	}
 	i++ // Move past opening brace line
 
+	// Keep track of brace depth to handle nested blocks (oneof, nested messages, etc.)
+	braceDepth := 1
+
 	// Parse fields until closing brace
-	for i < len(lines) {
+	for i < len(lines) && braceDepth > 0 {
 		fieldLine := strings.TrimSpace(lines[i])
 
 		// Skip empty lines and comments
@@ -223,19 +226,34 @@ func (r *Registry) parseMessage(lines []string, startIndex int) (*schema.Message
 			continue
 		}
 
-		// Check for closing brace
-		if strings.HasPrefix(fieldLine, "}") {
+		// Count braces to track nesting depth
+		openBraces := strings.Count(fieldLine, "{")
+		closeBraces := strings.Count(fieldLine, "}")
+		braceDepth += openBraces - closeBraces
+
+		// If we're at depth 0, we've reached the end of the message
+		if braceDepth == 0 {
 			break
 		}
 
-		// Parse field
-		field, err := r.parseField(fieldLine)
-		if err != nil {
-			return nil, i, fmt.Errorf("failed to parse field in message %s: %w", messageName, err)
+		// Skip lines that are nested inside oneof or other blocks
+		if openBraces > 0 && strings.Contains(fieldLine, "oneof") {
+			i++
+			continue
 		}
 
-		if field != nil {
-			message.Fields = append(message.Fields, field)
+		// Parse fields at the top level (depth 1) OR inside oneof blocks (depth 2)
+		// Oneof fields should be treated as regular message fields
+		if (braceDepth == 1 || braceDepth == 2) && !strings.Contains(fieldLine, "{") && !strings.Contains(fieldLine, "}") {
+			// Parse field
+			field, err := r.parseField(fieldLine)
+			if err != nil {
+				return nil, i, fmt.Errorf("failed to parse field in message %s: %w", messageName, err)
+			}
+
+			if field != nil {
+				message.Fields = append(message.Fields, field)
+			}
 		}
 
 		i++
@@ -253,6 +271,7 @@ func (r *Registry) parseField(line string) (*schema.Field, error) {
 	}
 
 	parts := strings.Fields(line)
+
 	if len(parts) < 4 {
 		return nil, nil // Skip invalid field lines
 	}
@@ -267,6 +286,8 @@ func (r *Registry) parseField(line string) (*schema.Field, error) {
 	} else if parts[0] == "map" || strings.HasPrefix(line, "map<") {
 		// Handle map<key, value> field_name = number;
 		return r.parseMapField(line)
+	} else if parts[0] == "oneof" {
+		return nil, nil
 	}
 
 	fieldType := parts[fieldIndex]

@@ -126,18 +126,54 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{}, field *schema.Field) error {
 	slice, ok := value.([]interface{})
 	if !ok {
-		// Try to convert []map[string]interface{} to []interface{}
-		if mapSlice, ok := value.([]map[string]interface{}); ok {
-			slice = make([]interface{}, len(mapSlice))
-			for i, v := range mapSlice {
-				slice[i] = v
+		// Try to convert different slice types to []interface{}
+		switch v := value.(type) {
+		case []map[string]interface{}:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
 			}
-		} else if stringSlice, ok := value.([]string); ok {
-			slice = make([]interface{}, len(stringSlice))
-			for i, v := range stringSlice {
-				slice[i] = v
+		case []string:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
 			}
-		} else {
+		case []int32:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
+			}
+		case []int64:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
+			}
+		case []uint32:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
+			}
+		case []uint64:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
+			}
+		case []bool:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
+			}
+		case []float32:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
+			}
+		case []float64:
+			slice = make([]interface{}, len(v))
+			for i, val := range v {
+				slice[i] = val
+			}
+		default:
 			return fmt.Errorf("repeated field value must be a slice, got %T", value)
 		}
 	}
@@ -269,15 +305,53 @@ func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, fi
 	case map[string]interface{}:
 		mapData = make(map[interface{}]interface{})
 		for k, val := range v {
-			mapData[k] = val
+			// If the map value is a message type, encode it first
+			if field.Type.MapValue.Kind == schema.KindMessage {
+				if messageData, ok := val.(map[string]interface{}); ok {
+					// Get the message schema
+					messageSchema, err := me.encoder.registry.GetMessage(field.Type.MapValue.MessageType)
+					if err != nil {
+						return fmt.Errorf("failed to get message schema for %s: %v", field.Type.MapValue.MessageType, err)
+					}
+
+					// Encode the message
+					nestedEncoder := NewEncoder()
+					nestedEncoder.registry = me.encoder.registry
+					nestedMessageEncoder := NewMessageEncoder(nestedEncoder)
+					if err := nestedMessageEncoder.EncodeMessage(messageData, messageSchema); err != nil {
+						return fmt.Errorf("failed to encode nested message: %v", err)
+					}
+
+					mapData[k] = nestedEncoder.Bytes()
+				} else {
+					mapData[k] = val
+				}
+			} else {
+				mapData[k] = val
+			}
 		}
 	case map[string]string:
 		mapData = make(map[interface{}]interface{})
 		for k, val := range v {
 			mapData[k] = val
 		}
+	case map[string]int64:
+		mapData = make(map[interface{}]interface{})
+		for k, val := range v {
+			mapData[k] = val
+		}
+	case map[int32]string:
+		mapData = make(map[interface{}]interface{})
+		for k, val := range v {
+			mapData[k] = val
+		}
+	case map[string]float64:
+		mapData = make(map[interface{}]interface{})
+		for k, val := range v {
+			mapData[k] = val
+		}
 	default:
-		return fmt.Errorf("map value must be map[string]string, map[string]interface{}, or map[interface{}]interface{}, got %T", value)
+		return fmt.Errorf("unsupported map type: %T", value)
 	}
 
 	// Use the map encoder to encode the entire map with field tags
