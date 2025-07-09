@@ -8,6 +8,9 @@ require (
 	google.golang.org/protobuf v1.34.2
 )
 
-require golang.org/x/sync v0.8.0 // indirect
+require (
+	github.com/yoheimuta/go-protoparser/v4 v4.14.2 // indirect
+	golang.org/x/sync v0.8.0 // indirect
+)
 
 replace github.com/anirudhraja/protolite => ../

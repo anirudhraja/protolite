@@ -43,14 +43,16 @@ func setupBenchmarkData() {
 
 	// Setup Protolite client
 	protoliteClient = protolite.NewProtolite()
-	err = protoliteClient.LoadSchemaFromFile("proto/user.proto")
-	if err != nil {
-		panic("Failed to load schema: " + err.Error())
-	}
 	err = protoliteClient.LoadSchemaFromFile("proto/post.proto")
 	if err != nil {
 		panic("Failed to load post schema: " + err.Error())
 	}
+
+	err = protoliteClient.LoadSchemaFromFile("proto/user.proto")
+	if err != nil {
+		panic("Failed to load schema: " + err.Error())
+	}
+
 
 	// Create simple payload (basic fields only)
 	simpleUser := &pb.User{

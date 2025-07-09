@@ -1,13 +1,17 @@
 package registry
 
 import (
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/anirudhraja/protolite/schema"
+	protoparser "github.com/yoheimuta/go-protoparser/v4"
+	protoparserparser "github.com/yoheimuta/go-protoparser/v4/parser"
 )
 
 // Registry allows us to store the schema of the protobuf messages. We look this up when we need to parse or marshal a message.
@@ -93,397 +97,241 @@ func (r *Registry) LoadSchema(protoPath string) error {
 
 // loadSingleProtoFile loads and parses a single .proto file
 func (r *Registry) loadSingleProtoFile(filePath string) error {
-	content, err := os.ReadFile(filePath)
+
+	protoBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
-
+	buf := bytes.NewBuffer(protoBytes)
+	parsedBody, err := protoparser.Parse(buf)
+	if err != nil {
+		return err
+	}
 	protoFile := &schema.ProtoFile{
 		Name:     filepath.Base(filePath),
 		Syntax:   "proto3", // Default
-		Package:  "",
 		Imports:  []*schema.Import{},
 		Messages: []*schema.Message{},
 		Enums:    []*schema.Enum{},
 		Services: []*schema.Service{},
 	}
+	// preprocess the imports first and add package name to each entity
+	for _, body := range parsedBody.ProtoBody {
+		switch b := body.(type) {
 
-	// Parse the proto file content
-	if err := r.parseProtoContent(string(content), protoFile); err != nil {
-		return fmt.Errorf("failed to parse proto content: %w", err)
+		case *protoparserparser.Package:
+			protoFile.Package = b.Name
+
+		case *protoparserparser.Import: // resolve relation for each imports
+			singleImport := &schema.Import{
+				Path: b.Location,
+			}
+			if b.Modifier == protoparserparser.ImportModifierPublic {
+				singleImport.Public = true
+			}
+
+			if b.Modifier == protoparserparser.ImportModifierWeak {
+				singleImport.Weak = true
+			}
+			protoFile.Imports = append(protoFile.Imports, singleImport)
+		case *protoparserparser.Message:
+			msg, err := r.processMessage(b)
+			if err != nil {
+				return fmt.Errorf("Unable to process message: %v", b.MessageName)
+			}
+			protoFile.Messages = append(protoFile.Messages, msg)
+		case *protoparserparser.Enum:
+			enum, err := r.processEnum(b)
+			if err != nil {
+				return fmt.Errorf("Unable to process enum: %v", b.EnumName)
+			}
+			protoFile.Enums = append(protoFile.Enums, enum)
+		case *protoparserparser.Service:
+			service, err := r.processService(b)
+			if err != nil {
+				return fmt.Errorf("Unable to process service: %v", b.ServiceName)
+			}
+			protoFile.Services = append(protoFile.Services, service)
+
+		}
 	}
-
 	// Store in the ProtoRepo
 	r.repo.ProtoFiles[filePath] = protoFile
 	return nil
 }
 
-// parseProtoContent parses the content of a proto file and populates the ProtoFile structure
-func (r *Registry) parseProtoContent(content string, protoFile *schema.ProtoFile) error {
-	lines := strings.Split(content, "\n")
-
-	for i := 0; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
-
-		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-
-		// Parse package
-		if strings.HasPrefix(line, "package ") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				protoFile.Package = strings.TrimSuffix(parts[1], ";")
-			}
-			continue
-		}
-
-		// Parse syntax
-		if strings.HasPrefix(line, "syntax ") {
-			if strings.Contains(line, "proto2") {
-				protoFile.Syntax = "proto2"
-			}
-			continue
-		}
-
-		// Parse imports
-		if strings.HasPrefix(line, "import ") {
-			// Extract import path - simple implementation
-			start := strings.Index(line, "\"")
-			end := strings.LastIndex(line, "\"")
-			if start != -1 && end != -1 && start != end {
-				importPath := line[start+1 : end]
-				protoFile.Imports = append(protoFile.Imports, &schema.Import{Path: importPath})
-			}
-			continue
-		}
-
-		// Parse messages
-		if strings.HasPrefix(line, "message ") {
-			message, newIndex, err := r.parseMessage(lines, i)
-			if err != nil {
-				return err
-			}
-			protoFile.Messages = append(protoFile.Messages, message)
-			i = newIndex
-			continue
-		}
-
-		// Parse enums
-		if strings.HasPrefix(line, "enum ") {
-			enum, newIndex, err := r.parseEnum(lines, i)
-			if err != nil {
-				return err
-			}
-			protoFile.Enums = append(protoFile.Enums, enum)
-			i = newIndex
-			continue
-		}
-	}
-
-	return nil
-}
-
 // parseMessage parses a message definition starting from the given line index
-func (r *Registry) parseMessage(lines []string, startIndex int) (*schema.Message, int, error) {
-	line := strings.TrimSpace(lines[startIndex])
-
-	// Extract message name
-	parts := strings.Fields(line)
-	if len(parts) < 2 {
-		return nil, startIndex, fmt.Errorf("invalid message declaration: %s", line)
+func (r *Registry) processMessage(message *protoparserparser.Message) (*schema.Message, error) {
+	msg := &schema.Message{
+		Name: message.MessageName,
 	}
-
-	messageName := parts[1]
-	messageName = strings.TrimSuffix(messageName, "{")
-	messageName = strings.TrimSpace(messageName)
-
-	message := &schema.Message{
-		Name:        messageName,
-		Fields:      []*schema.Field{},
-		NestedTypes: []*schema.Message{},
-		NestedEnums: []*schema.Enum{},
-	}
-
-	// Find opening brace if not on same line
-	i := startIndex
-	for i < len(lines) && !strings.Contains(lines[i], "{") {
-		i++
-	}
-	i++ // Move past opening brace line
-
-	// Parse fields until closing brace
-	for i < len(lines) {
-		fieldLine := strings.TrimSpace(lines[i])
-
-		// Skip empty lines and comments
-		if fieldLine == "" || strings.HasPrefix(fieldLine, "//") {
-			i++
-			continue
-		}
-
-		// Check for closing brace
-		if strings.HasPrefix(fieldLine, "}") {
-			break
-		}
-
-		// Parse field
-		field, err := r.parseField(fieldLine)
-		if err != nil {
-			return nil, i, fmt.Errorf("failed to parse field in message %s: %w", messageName, err)
-		}
-
-		if field != nil {
-			message.Fields = append(message.Fields, field)
-		}
-
-		i++
-	}
-
-	return message, i, nil
-}
-
-// parseField parses a field definition line
-func (r *Registry) parseField(line string) (*schema.Field, error) {
-	// Remove trailing semicolon and comments
-	line = strings.TrimSuffix(line, ";")
-	if commentIndex := strings.Index(line, "//"); commentIndex != -1 {
-		line = strings.TrimSpace(line[:commentIndex])
-	}
-
-	parts := strings.Fields(line)
-	if len(parts) < 4 {
-		return nil, nil // Skip invalid field lines
-	}
-
-	// Handle repeated, map, and optional keywords
-	fieldIndex := 0
-	label := schema.LabelOptional
-
-	if parts[0] == "repeated" {
-		label = schema.LabelRepeated
-		fieldIndex = 1
-	} else if parts[0] == "map" || strings.HasPrefix(line, "map<") {
-		// Handle map<key, value> field_name = number;
-		return r.parseMapField(line)
-	}
-
-	fieldType := parts[fieldIndex]
-	fieldName := parts[fieldIndex+1]
-
-	// Extract field number
-	numberPart := ""
-	for i := fieldIndex + 2; i < len(parts); i++ {
-		if parts[i] == "=" && i+1 < len(parts) {
-			numberPart = parts[i+1]
-			break
-		}
-		if strings.Contains(parts[i], "=") {
-			numberPart = strings.Split(parts[i], "=")[1]
-			break
-		}
-	}
-
-	if numberPart == "" {
-		return nil, fmt.Errorf("no field number found in: %s", line)
-	}
-
-	// Parse field number
-	var fieldNumber int32
-	if _, err := fmt.Sscanf(numberPart, "%d", &fieldNumber); err != nil {
-		return nil, fmt.Errorf("invalid field number: %s", numberPart)
-	}
-
-	// Convert type to FieldType
-	protoFieldType, err := r.convertProtoType(fieldType)
-	if err != nil {
-		return nil, err
-	}
-
-	return &schema.Field{
-		Name:   fieldName,
-		Number: fieldNumber,
-		Label:  label,
-		Type:   *protoFieldType,
-	}, nil
-}
-
-// parseMapField parses a map field definition
-func (r *Registry) parseMapField(line string) (*schema.Field, error) {
-	// Example: map<string, string> metadata = 7;
-	mapStart := strings.Index(line, "<")
-	mapEnd := strings.Index(line, ">")
-	if mapStart == -1 || mapEnd == -1 {
-		return nil, fmt.Errorf("invalid map field: %s", line)
-	}
-
-	mapTypes := strings.TrimSpace(line[mapStart+1 : mapEnd])
-	typeParts := strings.Split(mapTypes, ",")
-	if len(typeParts) != 2 {
-		return nil, fmt.Errorf("invalid map types: %s", mapTypes)
-	}
-
-	keyType := strings.TrimSpace(typeParts[0])
-	valueType := strings.TrimSpace(typeParts[1])
-
-	// Extract field name and number
-	afterMap := strings.TrimSpace(line[mapEnd+1:])
-	parts := strings.Fields(afterMap)
-	if len(parts) < 3 {
-		return nil, fmt.Errorf("invalid map field format: %s", line)
-	}
-
-	fieldName := parts[0]
-
-	// Find field number
-	var fieldNumber int32
-	for i := 1; i < len(parts); i++ {
-		if parts[i] == "=" && i+1 < len(parts) {
-			if _, err := fmt.Sscanf(parts[i+1], "%d", &fieldNumber); err != nil {
-				return nil, fmt.Errorf("invalid field number: %s", parts[i+1])
+	nestedEnums := make([]*schema.Enum, 0)
+	nestedTypes := make([]*schema.Message, 0)
+	fields := make([]*schema.Field, 0)
+	oneOfGroups := make([]*schema.Oneof, 0)
+	for _, m := range message.MessageBody {
+		switch b := m.(type) {
+		case *protoparserparser.Enum:
+			enum, err := r.processEnum(b)
+			if err != nil {
+				return nil, err
 			}
-			break
+			nestedEnums = append(nestedEnums, enum)
+		case *protoparserparser.Message:
+			msg, err := r.processMessage(b)
+			if err != nil {
+				return nil, err
+			}
+			nestedTypes = append(nestedTypes, msg)
+		case *protoparserparser.Field:
+			field, err := r.processField(b)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, field)
+		case *protoparserparser.MapField:
+			field, err := r.processMapField(b)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, field)
+		case *protoparserparser.Oneof:
+			oneOfFields := make([]*schema.Field, 0)
+			for _, field := range b.OneofFields {
+				fieldNumber, err := strconv.ParseInt(field.FieldNumber, 10, 32)
+				if err != nil {
+					return nil, err
+				}
+				fieldLabel := schema.LabelOptional
+				f := &schema.Field{
+					Name:   field.FieldName,
+					Number: int32(fieldNumber),
+					Label:  fieldLabel,
+					Type:   *r.convertProtoType(field.Type),
+				}
+				oneOfFields = append(oneOfFields, f)
+			}
+			oneOfGroups = append(oneOfGroups, &schema.Oneof{
+				Name:   b.OneofName,
+				Fields: oneOfFields,
+			})
 		}
 	}
+	msg.NestedTypes = nestedTypes
+	msg.Fields = fields
+	msg.NestedEnums = nestedEnums
+	msg.OneofGroups = oneOfGroups
 
-	// Convert types
-	keyFieldType, err := r.convertProtoType(keyType)
+	return msg, nil
+}
+
+func (r *Registry) processField(field *protoparserparser.Field) (*schema.Field, error) {
+	fieldNumber, err := strconv.ParseInt(field.FieldNumber, 10, 32)
 	if err != nil {
 		return nil, err
 	}
+	fieldLabel := schema.LabelOptional
+	if field.IsRepeated {
+		fieldLabel = schema.LabelRepeated
+	} else if field.IsRequired {
+		fieldLabel = schema.LabelRequired
+	}
+	f := &schema.Field{
+		Name:   field.FieldName,
+		Number: int32(fieldNumber),
+		Label:  fieldLabel,
+		Type:   *r.convertProtoType(field.Type),
+	}
+	return f, nil
+}
 
-	valueFieldType, err := r.convertProtoType(valueType)
+func (r *Registry) processMapField(field *protoparserparser.MapField) (*schema.Field, error) {
+	fieldNumber, err := strconv.ParseInt(field.FieldNumber, 10, 32)
 	if err != nil {
 		return nil, err
 	}
-
-	return &schema.Field{
-		Name:   fieldName,
-		Number: fieldNumber,
+	f := &schema.Field{
+		Name:   field.MapName,
+		Number: int32(fieldNumber),
 		Label:  schema.LabelOptional,
 		Type: schema.FieldType{
 			Kind:     schema.KindMap,
-			MapKey:   keyFieldType,
-			MapValue: valueFieldType,
+			MapKey:   r.convertProtoType(field.KeyType),
+			MapValue: r.convertProtoType(field.Type),
 		},
+	}
+	return f, nil
+}
+
+func (r *Registry) processService(service *protoparserparser.Service) (*schema.Service, error) {
+	methods := make([]*schema.Method, 0)
+	for _, rpc := range service.ServiceBody {
+		switch b := rpc.(type) {
+		case *protoparserparser.RPC:
+			method := &schema.Method{
+				Name:            b.RPCName,
+				InputType:       b.RPCRequest.MessageType,
+				OutputType:      b.RPCResponse.MessageType,
+				ClientStreaming: b.RPCRequest.IsStream,
+				ServerStreaming: b.RPCResponse.IsStream,
+			}
+			methods = append(methods, method)
+		}
+	}
+	return &schema.Service{
+		Name:    service.ServiceName,
+		Methods: methods,
 	}, nil
 }
 
-// parseEnum parses an enum definition starting from the given line index
-func (r *Registry) parseEnum(lines []string, startIndex int) (*schema.Enum, int, error) {
-	line := strings.TrimSpace(lines[startIndex])
+// processEnum parses an enum definition starting from the given line index
+func (r *Registry) processEnum(enum *protoparserparser.Enum) (*schema.Enum, error) {
+	enumValues := make([]*schema.EnumValue, 0)
+	for _, en := range enum.EnumBody {
+		switch b := en.(type) {
 
-	// Extract enum name
-	parts := strings.Fields(line)
-	if len(parts) < 2 {
-		return nil, startIndex, fmt.Errorf("invalid enum declaration: %s", line)
-	}
-
-	enumName := parts[1]
-	enumName = strings.TrimSuffix(enumName, "{")
-	enumName = strings.TrimSpace(enumName)
-
-	enum := &schema.Enum{
-		Name:   enumName,
-		Values: []*schema.EnumValue{},
-	}
-
-	// Find opening brace if not on same line
-	i := startIndex
-	for i < len(lines) && !strings.Contains(lines[i], "{") {
-		i++
-	}
-	i++ // Move past opening brace line
-
-	// Parse enum values until closing brace
-	for i < len(lines) {
-		valueLine := strings.TrimSpace(lines[i])
-
-		// Skip empty lines and comments
-		if valueLine == "" || strings.HasPrefix(valueLine, "//") {
-			i++
-			continue
-		}
-
-		// Check for closing brace
-		if strings.HasPrefix(valueLine, "}") {
-			break
-		}
-
-		// Parse enum value
-		enumValue, err := r.parseEnumValue(valueLine)
-		if err != nil {
-			return nil, i, fmt.Errorf("failed to parse enum value in enum %s: %w", enumName, err)
-		}
-
-		if enumValue != nil {
-			enum.Values = append(enum.Values, enumValue)
-		}
-
-		i++
-	}
-
-	return enum, i, nil
-}
-
-// parseEnumValue parses an enum value line
-func (r *Registry) parseEnumValue(line string) (*schema.EnumValue, error) {
-	// Remove trailing semicolon and comments
-	line = strings.TrimSuffix(line, ";")
-	if commentIndex := strings.Index(line, "//"); commentIndex != -1 {
-		line = strings.TrimSpace(line[:commentIndex])
-	}
-
-	parts := strings.Fields(line)
-	if len(parts) < 3 {
-		return nil, nil // Skip invalid enum value lines
-	}
-
-	enumName := parts[0]
-
-	// Find the number after "="
-	var enumNumber int32
-	for i := 1; i < len(parts); i++ {
-		if parts[i] == "=" && i+1 < len(parts) {
-			if _, err := fmt.Sscanf(parts[i+1], "%d", &enumNumber); err != nil {
-				return nil, fmt.Errorf("invalid enum number: %s", parts[i+1])
+		case *protoparserparser.EnumField:
+			num, err := strconv.Atoi(b.Number)
+			if err != nil {
+				return nil, err
 			}
-			break
+			enumValues = append(enumValues, &schema.EnumValue{
+				Name:   b.Ident,
+				Number: int32(num),
+			})
 		}
 	}
-
-	return &schema.EnumValue{
-		Name:   enumName,
-		Number: enumNumber,
+	return &schema.Enum{
+		Name:   enum.EnumName,
+		Values: enumValues,
 	}, nil
 }
 
 // convertProtoType converts a protobuf type string to a FieldType
-func (r *Registry) convertProtoType(protoType string) (*schema.FieldType, error) {
+func (r *Registry) convertProtoType(protoType string) *schema.FieldType {
 	switch protoType {
 	case "int32":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt32}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt32}
 	case "int64":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt64}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt64}
 	case "uint32":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint32}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint32}
 	case "uint64":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint64}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint64}
 	case "string":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeString}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeString}
 	case "bytes":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeBytes}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeBytes}
 	case "bool":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeBool}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeBool}
 	case "float":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeFloat}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeFloat}
 	case "double":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeDouble}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeDouble}
 	default:
 		// For non-primitive types, we need to determine if it's an enum or message
 		// This will be resolved later in buildDefinitions after all types are registered
-		return &schema.FieldType{Kind: schema.KindMessage, MessageType: protoType}, nil
+		return &schema.FieldType{Kind: schema.KindMessage, MessageType: protoType}
 	}
 }
 
