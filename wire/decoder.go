@@ -140,6 +140,8 @@ func (d *Decoder) DecodeTypedField(fieldType *schema.FieldType, wireType WireTyp
 			"key":   key,
 			"value": value,
 		}, nil
+	case schema.KindWrapper:
+		return d.decodeWrapper(fieldType.WrapperType, wireType)
 	default:
 		return d.decodeRawValue(wireType)
 	}
@@ -197,6 +199,130 @@ func (d *Decoder) decodePrimitive(primitiveType schema.PrimitiveType, wireType W
 		return rawValue, nil
 	default:
 		return nil, fmt.Errorf("invalid wire type %d for primitive %s", wireType, primitiveType)
+	}
+}
+
+// decodeWrapper decodes a wrapper type
+func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireType) (interface{}, error) {
+	// Wrapper types are encoded as length-delimited messages
+	if wireType != WireBytes {
+		return nil, fmt.Errorf("wrapper type must use wire type bytes, got %d", wireType)
+	}
+
+	// Decode the wrapper message bytes
+	bd := NewBytesDecoder(d)
+	wrapperBytes, err := bd.DecodeBytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode wrapper message bytes: %v", err)
+	}
+
+	// Create a new decoder for the wrapper message content
+	wrapperDecoder := NewDecoder(wrapperBytes)
+
+	// Decode the wrapper value field (field number 1)
+	if wrapperDecoder.pos >= len(wrapperDecoder.buf) {
+		// Empty wrapper message means nil value
+		return nil, nil
+	}
+
+	// Decode the field tag
+	tag, err := wrapperDecoder.DecodeVarint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode wrapper field tag: %v", err)
+	}
+
+	fieldNumber, valueWireType := ParseTag(Tag(tag))
+	if fieldNumber != 1 {
+		return nil, fmt.Errorf("expected field number 1 in wrapper, got %d", fieldNumber)
+	}
+
+	// Decode the actual value based on wrapper type
+	switch wrapperType {
+	case schema.WrapperDoubleValue:
+		if valueWireType != WireFixed64 {
+			return nil, fmt.Errorf("expected fixed64 wire type for DoubleValue, got %d", valueWireType)
+		}
+		fd := NewFixedDecoder(wrapperDecoder)
+		return fd.DecodeFloat64()
+
+	case schema.WrapperFloatValue:
+		if valueWireType != WireFixed32 {
+			return nil, fmt.Errorf("expected fixed32 wire type for FloatValue, got %d", valueWireType)
+		}
+		fd := NewFixedDecoder(wrapperDecoder)
+		return fd.DecodeFloat32()
+
+	case schema.WrapperInt64Value:
+		if valueWireType != WireVarint {
+			return nil, fmt.Errorf("expected varint wire type for Int64Value, got %d", valueWireType)
+		}
+		vd := NewVarintDecoder(wrapperDecoder)
+		rawValue, err := vd.DecodeVarint()
+		if err != nil {
+			return nil, err
+		}
+		return int64(rawValue), nil
+
+	case schema.WrapperUInt64Value:
+		if valueWireType != WireVarint {
+			return nil, fmt.Errorf("expected varint wire type for UInt64Value, got %d", valueWireType)
+		}
+		vd := NewVarintDecoder(wrapperDecoder)
+		return vd.DecodeVarint()
+
+	case schema.WrapperInt32Value:
+		if valueWireType != WireVarint {
+			return nil, fmt.Errorf("expected varint wire type for Int32Value, got %d", valueWireType)
+		}
+		vd := NewVarintDecoder(wrapperDecoder)
+		rawValue, err := vd.DecodeVarint()
+		if err != nil {
+			return nil, err
+		}
+		return int32(rawValue), nil
+
+	case schema.WrapperUInt32Value:
+		if valueWireType != WireVarint {
+			return nil, fmt.Errorf("expected varint wire type for UInt32Value, got %d", valueWireType)
+		}
+		vd := NewVarintDecoder(wrapperDecoder)
+		rawValue, err := vd.DecodeVarint()
+		if err != nil {
+			return nil, err
+		}
+		return uint32(rawValue), nil
+
+	case schema.WrapperBoolValue:
+		if valueWireType != WireVarint {
+			return nil, fmt.Errorf("expected varint wire type for BoolValue, got %d", valueWireType)
+		}
+		vd := NewVarintDecoder(wrapperDecoder)
+		rawValue, err := vd.DecodeVarint()
+		if err != nil {
+			return nil, err
+		}
+		return rawValue != 0, nil
+
+	case schema.WrapperStringValue:
+		if valueWireType != WireBytes {
+			return nil, fmt.Errorf("expected bytes wire type for StringValue, got %d", valueWireType)
+		}
+		bd := NewBytesDecoder(wrapperDecoder)
+		stringBytes, err := bd.DecodeBytes()
+		if err != nil {
+			return nil, err
+		}
+		return string(stringBytes), nil
+
+	case schema.WrapperBytesValue:
+		if valueWireType != WireBytes {
+			return nil, fmt.Errorf("expected bytes wire type for BytesValue, got %d", valueWireType)
+		}
+		bd := NewBytesDecoder(wrapperDecoder)
+		return bd.DecodeBytes()
+
+	default:
+		return nil, fmt.Errorf("unsupported wrapper type: %s", wrapperType)
 	}
 }
 

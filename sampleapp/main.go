@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/anirudhraja/protolite"
 )
@@ -21,6 +22,16 @@ func main() {
 		log.Fatalf("Failed to load user.proto: %v", err)
 	}
 
+	fmt.Println("🚀 Protolite Sample App - Now with Google Protobuf Wrapper Types!")
+	fmt.Println(strings.Repeat("=", 70))
+
+	// Demonstrate wrapper types with multiple user examples
+	demonstrateWrapperTypes(proto)
+
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	fmt.Println("📋 Complete User Demo with All Protobuf Features:")
+	fmt.Println(strings.Repeat("=", 70))
+
 	// Create comprehensive User data demonstrating all protobuf features
 	userData := map[string]interface{}{
 		"id":        int32(1),
@@ -32,6 +43,18 @@ func main() {
 		// oneof contact_method - using email
 		"email": "john.doe@example.com",
 
+		// 🎯 NEW: Wrapper types for optional/nullable fields
+		"optional_nickname": "JohnnyDev",                         // StringValue - set
+		"optional_age":      int32(29),                           // Int32Value - set
+		"premium_member":    true,                                // BoolValue - set
+		"account_balance":   float64(1250.75),                    // DoubleValue - set
+		"bio":               "Go enthusiast and protobuf expert", // StringValue - set
+		"last_login":        int64(1640995200),                   // Int64Value - set
+		"reputation_score":  uint32(9850),                        // UInt32Value - set
+		"rating":            float32(4.8),                        // FloatValue - set
+		"profile_image":     []byte{0x89, 0x50, 0x4E, 0x47},      // BytesValue - set
+		// Note: some wrapper fields intentionally omitted to show nil behavior
+
 		// Nested Address message with deeply nested Coordinates
 		"address": map[string]interface{}{
 			"street":      "123 Main St",
@@ -40,6 +63,12 @@ func main() {
 			"country":     "USA",
 			"postal_code": "94105",
 			"type":        int32(0), // ADDRESS_HOME
+
+			// 🎯 NEW: Wrapper types in nested messages
+			"apartment_number": "Apt 4B", // StringValue - set
+			"is_primary":       true,     // BoolValue - set
+			// special_instructions omitted - will be nil (not encoded)
+
 			"coordinates": map[string]interface{}{
 				"latitude":  37.7749,
 				"longitude": -122.4194,
@@ -199,148 +228,281 @@ func main() {
 								"username":          "john_doe",
 								"content":           "Thanks! Glad you found it helpful.",
 								"created_at":        int64(1641003600),
+								"updated_at":        int64(1641003600),
+								"status":            int32(0), // COMMENT_VISIBLE
+								"likes":             int32(5),
+								"pinned":            false,
 								"parent_comment_id": int32(1),
-								"type":              int32(0), // REPLY_DIRECT
-								"likes":             int32(8),
-								"nested_replies": []map[string]interface{}{
-									{
-										"id":                int32(2),
-										"user_id":           int32(2),
-										"username":          "tech_reviewer",
-										"content":           "Looking forward to more content!",
-										"created_at":        int64(1641007200),
-										"parent_comment_id": int32(1),
-										"type":              int32(1), // REPLY_MENTION
-										"likes":             int32(3),
-										"nested_replies":    []map[string]interface{}{}, // Empty but shows recursive structure
-									},
+								"metadata": map[string]string{
+									"ip_address": "10.0.0.1",
 								},
+								// oneof comment_type - using text_comment
+								"text_comment": map[string]interface{}{
+									"formatted_text": "Thanks! Glad you found it helpful.",
+									"format":         int32(0), // TEXT_PLAIN
+									"mentions":       []string{},
+								},
+								"replies": []map[string]interface{}{}, // Empty nested replies
 							},
 						},
 					},
 				},
+			},
+			{
+				"id":         int32(102),
+				"title":      "Advanced Protobuf Patterns",
+				"author_id":  int32(1),
+				"status":     int32(1), // POST_PUBLISHED
+				"tags":       []string{"protobuf", "advanced", "patterns"},
+				"created_at": int64(1641081600),
+				"updated_at": int64(1641168000),
+				"view_count": int32(275),
+				"featured":   false,
+				"rating":     int32(1),          // RATING_TEEN
+				"flags":      []int32{int32(0)}, // FLAG_NONE
 
-				// Post metadata with nested structures
-				"metadata": map[string]interface{}{
-					"seo_title":       "Complete Protobuf Guide | Advanced Techniques",
-					"seo_description": "Learn advanced protobuf techniques including oneof, maps, and nested messages",
-					"keywords":        []string{"protobuf", "grpc", "serialization", "golang"},
-					"custom_fields": map[string]string{
-						"canonical_url": "https://blog.example.com/protobuf-guide",
-						"amp_url":       "https://blog.example.com/amp/protobuf-guide",
-					},
-					"social_meta": map[string]interface{}{
-						"og_title":       "Comprehensive Protobuf Guide",
-						"og_description": "Advanced protobuf techniques and best practices",
-						"og_image":       "https://blog.example.com/images/protobuf-cover.jpg",
-						"twitter_card":   "summary_large_image",
-						"platform_specific": map[string]string{
-							"twitter:creator": "@john_doe",
-							"fb:app_id":       "123456789",
-						},
-					},
-					"collaborators": []map[string]interface{}{
-						{
-							"user_id":     int32(3),
-							"username":    "editor_alice",
-							"role":        int32(2), // ROLE_EDITOR
-							"permissions": []string{"edit", "comment", "suggest"},
-						},
-						{
-							"user_id":     int32(4),
-							"username":    "reviewer_bob",
-							"role":        int32(1), // ROLE_COMMENTER
-							"permissions": []string{"comment", "view"},
+				// oneof content - using multimedia_content
+				"multimedia_content": map[string]interface{}{
+					"video_url":   "https://example.com/video.mp4",
+					"duration":    int32(1800), // 30 minutes
+					"quality":     int32(1),    // QUALITY_HD
+					"thumbnails":  []string{"thumb1.jpg", "thumb2.jpg"},
+					"captions":    []string{"English", "Spanish"},
+					"resolution":  "1920x1080",
+					"format":      "mp4",
+					"file_size":   int64(157286400), // ~150MB
+					"codec":       "H.264",
+					"bitrate":     int32(2500),
+					"frame_rate":  30.0,
+					"audio_codec": "AAC",
+				},
+
+				"metrics": map[string]interface{}{ // map<string, PostMetric>
+					"views": map[string]interface{}{
+						"value":        275.0,
+						"unit":         "count",
+						"last_updated": int64(1641168000),
+						"type":         int32(1), // METRIC_VIEWS
+						"history": []map[string]interface{}{
+							{"timestamp": int64(1641081600), "value": 100.0, "label": "launch"},
+							{"timestamp": int64(1641168000), "value": 275.0, "label": "week1"},
 						},
 					},
 				},
+				"revisions": map[int32]string{ // map<int32, string>
+					int32(1): "Initial version",
+					int32(2): "Added video content",
+				},
+				"analytics": map[string]float64{ // map<string, double>
+					"engagement_rate": 0.15,
+					"completion_rate": 0.67,
+					"likes_ratio":     0.89,
+				},
+				"categories": map[string]interface{}{ // map<string, CategoryInfo>
+					"advanced": map[string]interface{}{
+						"name":          "Advanced Topics",
+						"description":   "Advanced technical deep-dives",
+						"type":          int32(1), // CATEGORY_SECONDARY
+						"post_count":    int32(8),
+						"subcategories": []string{"patterns", "optimization", "best-practices"},
+					},
+				},
+				"comments": []map[string]interface{}{}, // No comments yet
 			},
 		},
 
-		"created_at": int64(1609459200),
+		"created_at": int64(1609459200), // 2021-01-01
 	}
 
-	fmt.Println("=== Comprehensive Protobuf Demo ===")
-	fmt.Printf("Features demonstrated:\n")
-	fmt.Printf("✅ oneof fields (contact_method, content, notification_data, comment_type)\n")
-	fmt.Printf("✅ Nested messages (Address -> Coordinates, deep nesting)\n")
-	fmt.Printf("✅ Nested repeated (notifications, comments with recursive replies)\n")
-	fmt.Printf("✅ Multiple map types (string->string, string->int64, int32->string, string->Message)\n")
-	fmt.Printf("✅ Comprehensive enums (12+ different enum types)\n")
-	fmt.Printf("✅ Recursive structures (Reply -> nested_replies)\n\n")
-
-	// Marshal with schema
-	fmt.Println("Marshaling comprehensive user data...")
+	// Marshal the user data
 	encodedData, err := proto.MarshalWithSchema(userData, "User")
 	if err != nil {
-		log.Fatalf("Failed to marshal: %v", err)
+		log.Fatalf("Failed to marshal user data: %v", err)
 	}
 
-	fmt.Printf("✅ Encoded data size: %d bytes\n\n", len(encodedData))
+	fmt.Printf("\n📦 Encoded user data: %d bytes\n", len(encodedData))
 
-	// Parse without schema (shows raw field numbers)
-	fmt.Println("Schema-less parsing (field numbers only)...")
-	parsedData, err := proto.Parse(encodedData)
+	// Unmarshal back to verify
+	result, err := proto.UnmarshalWithSchema(encodedData, "User")
 	if err != nil {
-		log.Fatalf("Failed to parse: %v", err)
+		log.Fatalf("Failed to unmarshal user data: %v", err)
 	}
 
-	fmt.Printf("✅ Parsed %d top-level fields\n", len(parsedData))
-	for field := range parsedData {
-		fmt.Printf("  - %s\n", field)
-	}
-	fmt.Println()
+	fmt.Println("\n✅ Successfully marshaled and unmarshaled comprehensive user data!")
+	fmt.Printf("👤 User: %s (ID: %v)\n", result["name"], result["id"])
+	fmt.Printf("📧 Email: %s\n", result["email"])
+	fmt.Printf("🏠 Address: %s, %s, %s\n",
+		result["address"].(map[string]interface{})["street"],
+		result["address"].(map[string]interface{})["city"],
+		result["address"].(map[string]interface{})["state"])
 
-	// Unmarshal with schema (shows proper field names)
-	fmt.Println("Schema-based unmarshaling (proper field names)...")
-	userMap, err := proto.UnmarshalWithSchema(encodedData, "User")
+	// 🎯 Show wrapper type results
+	showWrapperResults(result)
+
+	fmt.Printf("📝 Posts: %d\n", len(result["posts"].([]interface{})))
+	fmt.Printf("🔔 Notifications: %d\n", len(result["notifications"].([]interface{})))
+	fmt.Printf("📊 Metadata entries: %d\n", len(result["metadata"].(map[interface{}]interface{})))
+
+	fmt.Println(strings.Repeat("=", 70))
+	fmt.Println("🎉 All protobuf features working perfectly!")
+	fmt.Println("✅ Primitive types, nested messages, maps, enums, oneof, repeated fields")
+	fmt.Println("🎯 NEW: Google protobuf wrapper types with nullable semantics!")
+	fmt.Println(strings.Repeat("=", 70))
+}
+
+// demonstrateWrapperTypes shows the key differences between regular proto3 fields and wrapper types
+func demonstrateWrapperTypes(proto protolite.Protolite) {
+	fmt.Println("\n🎯 Wrapper Types Demo - Nullable vs Non-Nullable Fields")
+	fmt.Println(strings.Repeat("-", 60))
+
+	// Example 1: User with some wrapper fields set
+	fmt.Println("\n1️⃣ User with SOME optional fields set:")
+	user1 := map[string]interface{}{
+		"id":        int32(100),
+		"name":      "Alice Smith",
+		"active":    true,
+		"status":    int32(1),
+		"user_type": int32(0),
+
+		// Wrapper fields - some set, some omitted (will be nil)
+		"optional_nickname": "Alice_Codes",                            // StringValue - SET
+		"optional_age":      int32(25),                                // Int32Value - SET
+		"premium_member":    true,                                     // BoolValue - SET
+		"bio":               "Frontend developer passionate about UX", // StringValue - SET
+		// account_balance, last_login, reputation_score, rating, profile_image - OMITTED (nil)
+
+		"email": "alice@example.com",
+	}
+
+	encoded1, err := proto.MarshalWithSchema(user1, "User")
 	if err != nil {
-		log.Fatalf("Failed to unmarshal: %v", err)
+		log.Fatalf("Failed to marshal user1: %v", err)
 	}
 
-	// Verify key features
-	fmt.Printf("✅ User: %s (ID: %v)\n", userMap["name"], userMap["id"])
+	decoded1, err := proto.UnmarshalWithSchema(encoded1, "User")
+	if err != nil {
+		log.Fatalf("Failed to unmarshal user1: %v", err)
+	}
 
-	if address, ok := userMap["address"].(map[string]interface{}); ok {
-		fmt.Printf("✅ Nested Address: %s, %s\n", address["city"], address["state"])
-		if coords, ok := address["coordinates"].(map[string]interface{}); ok {
-			fmt.Printf("✅ Deeply nested Coordinates: %v, %v\n", coords["latitude"], coords["longitude"])
+	fmt.Printf("   📦 Encoded: %d bytes\n", len(encoded1))
+	fmt.Printf("   👤 Name: %s, Nickname: %v\n", decoded1["name"], decoded1["optional_nickname"])
+	fmt.Printf("   🎂 Age: %v, Premium: %v\n", decoded1["optional_age"], decoded1["premium_member"])
+	fmt.Printf("   💰 Balance: %v (nil = not set)\n", decoded1["account_balance"])
+	fmt.Printf("   ⭐ Rating: %v (nil = not set)\n", decoded1["rating"])
+
+	// Example 2: User with NO wrapper fields set (all nil)
+	fmt.Println("\n2️⃣ User with NO optional fields set:")
+	user2 := map[string]interface{}{
+		"id":        int32(101),
+		"name":      "Bob Johnson",
+		"active":    false,
+		"status":    int32(2), // INACTIVE
+		"user_type": int32(4), // GUEST
+		"email":     "bob@example.com",
+		// ALL wrapper fields omitted - they will be nil
+	}
+
+	encoded2, err := proto.MarshalWithSchema(user2, "User")
+	if err != nil {
+		log.Fatalf("Failed to marshal user2: %v", err)
+	}
+
+	decoded2, err := proto.UnmarshalWithSchema(encoded2, "User")
+	if err != nil {
+		log.Fatalf("Failed to unmarshal user2: %v", err)
+	}
+
+	fmt.Printf("   📦 Encoded: %d bytes (smaller - no optional fields!)\n", len(encoded2))
+	fmt.Printf("   👤 Name: %s, Nickname: %v\n", decoded2["name"], decoded2["optional_nickname"])
+	fmt.Printf("   🎂 Age: %v, Premium: %v\n", decoded2["optional_age"], decoded2["premium_member"])
+	fmt.Printf("   💰 Balance: %v, Bio: %v\n", decoded2["account_balance"], decoded2["bio"])
+
+	// Example 3: User with zero values in wrapper fields (different from nil!)
+	fmt.Println("\n3️⃣ User with ZERO VALUES in optional fields (not nil!):")
+	user3 := map[string]interface{}{
+		"id":        int32(102),
+		"name":      "Charlie Brown",
+		"active":    true,
+		"status":    int32(1),
+		"user_type": int32(0),
+
+		// Wrapper fields with explicit zero values (different from omitting!)
+		"optional_nickname": "",           // StringValue - EMPTY STRING (not nil!)
+		"optional_age":      int32(0),     // Int32Value - ZERO (not nil!)
+		"premium_member":    false,        // BoolValue - FALSE (not nil!)
+		"account_balance":   float64(0.0), // DoubleValue - ZERO (not nil!)
+		"bio":               "",           // StringValue - EMPTY (not nil!)
+		"reputation_score":  uint32(0),    // UInt32Value - ZERO (not nil!)
+		"rating":            float32(0.0), // FloatValue - ZERO (not nil!)
+
+		"email": "charlie@example.com",
+	}
+
+	encoded3, err := proto.MarshalWithSchema(user3, "User")
+	if err != nil {
+		log.Fatalf("Failed to marshal user3: %v", err)
+	}
+
+	decoded3, err := proto.UnmarshalWithSchema(encoded3, "User")
+	if err != nil {
+		log.Fatalf("Failed to unmarshal user3: %v", err)
+	}
+
+	fmt.Printf("   📦 Encoded: %d bytes (larger - all wrapper fields encoded!)\n", len(encoded3))
+	fmt.Printf("   👤 Name: %s, Nickname: '%v' (empty string, not nil)\n", decoded3["name"], decoded3["optional_nickname"])
+	fmt.Printf("   🎂 Age: %v (zero, not nil), Premium: %v (false, not nil)\n", decoded3["optional_age"], decoded3["premium_member"])
+	fmt.Printf("   💰 Balance: %v (0.0, not nil)\n", decoded3["account_balance"])
+	fmt.Printf("   ⭐ Rating: %v (0.0, not nil)\n", decoded3["rating"])
+
+	fmt.Println("\n💡 Key Insight: Wrapper types distinguish between:")
+	fmt.Println("   • nil (field not set/omitted) - saves space, not encoded")
+	fmt.Println("   • zero value (field explicitly set to 0/false/empty) - encoded")
+	fmt.Println("   • Regular proto3 fields always have default values, never nil")
+}
+
+// showWrapperResults displays the wrapper type fields from the decoded result
+func showWrapperResults(result map[string]interface{}) {
+	fmt.Println("\n🎯 Wrapper Type Results:")
+	fmt.Println(strings.Repeat("-", 40))
+
+	wrapperFields := []string{
+		"optional_nickname", "optional_age", "premium_member",
+		"account_balance", "bio", "last_login",
+		"reputation_score", "rating", "profile_image",
+	}
+
+	for _, field := range wrapperFields {
+		if value, exists := result[field]; exists {
+			if value == nil {
+				fmt.Printf("   %s: <nil> (not set)\n", field)
+			} else {
+				switch v := value.(type) {
+				case []byte:
+					fmt.Printf("   %s: %v (bytes, length: %d)\n", field, v, len(v))
+				default:
+					fmt.Printf("   %s: %v (%T)\n", field, value, value)
+				}
+			}
+		} else {
+			fmt.Printf("   %s: <not present>\n", field)
 		}
 	}
 
-	if stats, ok := userMap["statistics"].(map[interface{}]interface{}); ok {
-		fmt.Printf("✅ Statistics map: %d entries\n", len(stats))
-	}
+	// Show wrapper types in nested address
+	if addr, ok := result["address"].(map[string]interface{}); ok {
+		fmt.Println("\n🏠 Address Wrapper Fields:")
+		addressWrappers := []string{"apartment_number", "is_primary", "special_instructions"}
 
-	if notifications, ok := userMap["notifications"].([]interface{}); ok {
-		fmt.Printf("✅ Notifications: %d items\n", len(notifications))
-	}
-
-	if posts, ok := userMap["posts"].([]interface{}); ok {
-		fmt.Printf("✅ Posts: %d items\n", len(posts))
-		if len(posts) > 0 {
-			if post, ok := posts[0].(map[string]interface{}); ok {
-				if comments, ok := post["comments"].([]interface{}); ok {
-					fmt.Printf("✅ Comments in first post: %d items\n", len(comments))
-					if len(comments) > 0 {
-						if comment, ok := comments[0].(map[string]interface{}); ok {
-							if replies, ok := comment["replies"].([]interface{}); ok {
-								fmt.Printf("✅ Replies in first comment: %d items\n", len(replies))
-								if len(replies) > 0 {
-									if reply, ok := replies[0].(map[string]interface{}); ok {
-										if nested, ok := reply["nested_replies"].([]interface{}); ok {
-											fmt.Printf("✅ Nested replies (recursive): %d items\n", len(nested))
-										}
-									}
-								}
-							}
-						}
-					}
+		for _, field := range addressWrappers {
+			if value, exists := addr[field]; exists {
+				if value == nil {
+					fmt.Printf("   %s: <nil> (not set)\n", field)
+				} else {
+					fmt.Printf("   %s: %v (%T)\n", field, value, value)
 				}
+			} else {
+				fmt.Printf("   %s: <not present>\n", field)
 			}
 		}
 	}
-
-	fmt.Println("\n🎉 Comprehensive Protobuf demo completed successfully!")
-	fmt.Println("All advanced features working: oneof, nested messages, recursive structures, multiple map types, and comprehensive enums!")
 }

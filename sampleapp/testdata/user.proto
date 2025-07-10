@@ -3,6 +3,7 @@ syntax = "proto3";
 package blog;
 
 import "post.proto";
+import "google/protobuf/wrappers.proto";
 
 message User {
     int32 id = 1;
@@ -12,6 +13,17 @@ message User {
     repeated Post posts = 6;  // User has many posts
     map<string, string> metadata = 7;  // Simple string map
     int64 created_at = 8;
+    
+    // Wrapper types for optional fields (nullable semantics)
+    google.protobuf.StringValue optional_nickname = 18;    // Can be null/unset
+    google.protobuf.Int32Value optional_age = 19;          // Can be null/unset
+    google.protobuf.BoolValue premium_member = 20;         // Can be null/unset
+    google.protobuf.DoubleValue account_balance = 21;      // Can be null/unset
+    google.protobuf.StringValue bio = 22;                  // Optional bio
+    google.protobuf.Int64Value last_login = 23;           // Optional timestamp
+    google.protobuf.UInt32Value reputation_score = 24;    // Optional score
+    google.protobuf.FloatValue rating = 25;               // Optional rating
+    google.protobuf.BytesValue profile_image = 26;        // Optional image data
     
     // Nested message
     Address address = 9;
@@ -45,6 +57,11 @@ message Address {
     
     // Nested coordinates
     Coordinates coordinates = 7;
+    
+    // Wrapper types for optional address fields
+    google.protobuf.StringValue apartment_number = 8;  // Optional apartment/unit
+    google.protobuf.BoolValue is_primary = 9;          // Optional primary address flag
+    google.protobuf.StringValue special_instructions = 10; // Optional delivery instructions
 }
 
 // Deeply nested message
