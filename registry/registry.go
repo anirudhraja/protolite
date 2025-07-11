@@ -328,6 +328,25 @@ func (r *Registry) convertProtoType(protoType string) *schema.FieldType {
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeFloat}
 	case "double":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeDouble}
+	// Google protobuf wrapper types
+	case "google.protobuf.DoubleValue":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperDoubleValue}
+	case "google.protobuf.FloatValue":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperFloatValue}
+	case "google.protobuf.Int64Value":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperInt64Value}
+	case "google.protobuf.UInt64Value":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperUInt64Value}
+	case "google.protobuf.Int32Value":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperInt32Value}
+	case "google.protobuf.UInt32Value":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperUInt32Value}
+	case "google.protobuf.BoolValue":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperBoolValue}
+	case "google.protobuf.StringValue":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperStringValue}
+	case "google.protobuf.BytesValue":
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperBytesValue}
 	default:
 		// For non-primitive types, we need to determine if it's an enum or message
 		// This will be resolved later in buildDefinitions after all types are registered
@@ -476,8 +495,8 @@ func (r *Registry) resolveMessageFields(message *schema.Message, packageName str
 
 // resolveFieldType resolves a single field type, determining if it's an enum or message
 func (r *Registry) resolveFieldType(fieldType *schema.FieldType, packageName string) error {
-	// Skip primitive types
-	if fieldType.Kind == schema.KindPrimitive || fieldType.Kind == schema.KindMap {
+	// Skip primitive types and wrapper types
+	if fieldType.Kind == schema.KindPrimitive || fieldType.Kind == schema.KindMap || fieldType.Kind == schema.KindWrapper {
 		return nil
 	}
 

@@ -143,6 +143,8 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 		return me.encodeMessageField(encoder, value, field.Type.MessageType)
 	case schema.KindEnum:
 		return me.encodeEnumField(encoder, value)
+	case schema.KindWrapper:
+		return me.encodeWrapperField(encoder, value, field.Type.WrapperType)
 	default:
 		return fmt.Errorf("unsupported field type: %s", field.Type.Kind)
 	}
@@ -227,6 +229,10 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 		case schema.KindEnum:
 			if err := me.encodeEnumField(encoder, element); err != nil {
 				return fmt.Errorf("failed to encode repeated enum element: %v", err)
+			}
+		case schema.KindWrapper:
+			if err := me.encodeWrapperField(encoder, element, field.Type.WrapperType); err != nil {
+				return fmt.Errorf("failed to encode repeated wrapper element: %v", err)
 			}
 		default:
 			return fmt.Errorf("unsupported repeated field type: %s", field.Type.Kind)
@@ -320,6 +326,125 @@ func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}) e
 	return ve.EncodeEnum(enumValue)
 }
 
+// encodeWrapperField encodes a wrapper field
+func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}, wrapperType schema.WrapperType) error {
+	// If wrapper value is nil, don't encode anything (optional semantics)
+	if value == nil {
+		return nil
+	}
+
+	// Create a temporary encoder for the wrapper message
+	wrapperEncoder := NewEncoder()
+	wrapperEncoder.registry = me.encoder.registry
+
+	// Encode the wrapper value field (field number 1)
+	ve := NewVarintEncoder(wrapperEncoder)
+
+	// Determine the wire type and encode the value based on wrapper type
+	switch wrapperType {
+	case schema.WrapperDoubleValue:
+		// Wire type: fixed64
+		tag := MakeTag(FieldNumber(1), WireFixed64)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		fe := NewFixedEncoder(wrapperEncoder)
+		if err := fe.EncodeFloat64(value.(float64)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	case schema.WrapperFloatValue:
+		// Wire type: fixed32
+		tag := MakeTag(FieldNumber(1), WireFixed32)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		fe := NewFixedEncoder(wrapperEncoder)
+		if err := fe.EncodeFloat32(value.(float32)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	case schema.WrapperInt64Value:
+		// Wire type: varint
+		tag := MakeTag(FieldNumber(1), WireVarint)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		if err := ve.EncodeInt64(value.(int64)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	case schema.WrapperUInt64Value:
+		// Wire type: varint
+		tag := MakeTag(FieldNumber(1), WireVarint)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		if err := ve.EncodeUint64(value.(uint64)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	case schema.WrapperInt32Value:
+		// Wire type: varint
+		tag := MakeTag(FieldNumber(1), WireVarint)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		if err := ve.EncodeInt32(value.(int32)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	case schema.WrapperUInt32Value:
+		// Wire type: varint
+		tag := MakeTag(FieldNumber(1), WireVarint)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		if err := ve.EncodeUint32(value.(uint32)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	case schema.WrapperBoolValue:
+		// Wire type: varint
+		tag := MakeTag(FieldNumber(1), WireVarint)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		if err := ve.EncodeBool(value.(bool)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	case schema.WrapperStringValue:
+		// Wire type: bytes
+		tag := MakeTag(FieldNumber(1), WireBytes)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		be := NewBytesEncoder(wrapperEncoder)
+		if err := be.EncodeString(value.(string)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	case schema.WrapperBytesValue:
+		// Wire type: bytes
+		tag := MakeTag(FieldNumber(1), WireBytes)
+		if err := ve.EncodeVarint(uint64(tag)); err != nil {
+			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
+		}
+		be := NewBytesEncoder(wrapperEncoder)
+		if err := be.EncodeBytes(value.([]byte)); err != nil {
+			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		}
+
+	default:
+		return fmt.Errorf("unsupported wrapper type: %s", wrapperType)
+	}
+
+	// Now encode the wrapper message bytes as a length-delimited field
+	be := NewBytesEncoder(encoder)
+	return be.EncodeBytes(wrapperEncoder.Bytes())
+}
+
 // encodeMapField encodes a map field
 func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, field *schema.Field) error {
 	var mapData map[interface{}]interface{}
@@ -407,6 +532,8 @@ func (me *MessageEncoder) getWireType(fieldType *schema.FieldType) WireType {
 		return WireVarint
 	case schema.KindMap:
 		return WireBytes
+	case schema.KindWrapper:
+		return WireBytes // Wrapper types are encoded as length-delimited messages
 	default:
 		return WireVarint
 	}

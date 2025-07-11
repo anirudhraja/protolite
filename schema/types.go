@@ -62,10 +62,11 @@ const (
 
 // FieldType represents field type information
 type FieldType struct {
-	Kind          TypeKind      `json:"kind"`                     // primitive, message, enum, map
+	Kind          TypeKind      `json:"kind"`                     // primitive, message, enum, map, wrapper
 	PrimitiveType PrimitiveType `json:"primitive_type,omitempty"` // for primitive types
 	MessageType   string        `json:"message_type,omitempty"`   // for message types: "User", "google.protobuf.Timestamp"
 	EnumType      string        `json:"enum_type,omitempty"`      // for enum types
+	WrapperType   WrapperType   `json:"wrapper_type,omitempty"`   // for wrapper types
 	MapKey        *FieldType    `json:"map_key,omitempty"`        // for map key type
 	MapValue      *FieldType    `json:"map_value,omitempty"`      // for map value type
 	ElementType   *FieldType    `json:"element_type,omitempty"`   // for repeated element type
@@ -79,6 +80,7 @@ const (
 	KindMessage   TypeKind = "message"
 	KindEnum      TypeKind = "enum"
 	KindMap       TypeKind = "map"
+	KindWrapper   TypeKind = "wrapper"
 )
 
 // PrimitiveType represents protobuf primitive types
@@ -100,6 +102,21 @@ const (
 	TypeSfixed64 PrimitiveType = "sfixed64"
 	TypeSint32   PrimitiveType = "sint32"
 	TypeSint64   PrimitiveType = "sint64"
+)
+
+// WrapperType represents protobuf wrapper types
+type WrapperType string
+
+const (
+	WrapperDoubleValue WrapperType = "google.protobuf.DoubleValue"
+	WrapperFloatValue  WrapperType = "google.protobuf.FloatValue"
+	WrapperInt64Value  WrapperType = "google.protobuf.Int64Value"
+	WrapperUInt64Value WrapperType = "google.protobuf.UInt64Value"
+	WrapperInt32Value  WrapperType = "google.protobuf.Int32Value"
+	WrapperUInt32Value WrapperType = "google.protobuf.UInt32Value"
+	WrapperBoolValue   WrapperType = "google.protobuf.BoolValue"
+	WrapperStringValue WrapperType = "google.protobuf.StringValue"
+	WrapperBytesValue  WrapperType = "google.protobuf.BytesValue"
 )
 
 // Enum represents an enum definition

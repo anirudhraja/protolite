@@ -207,6 +207,34 @@ if err != nil {
 fmt.Printf("Encoded %d bytes\n", len(protobufData))
 ```
 
+### 5. 🔧 Wrapper Types (Nullable Values)
+
+```go
+proto := protolite.NewProtolite()
+err := proto.LoadSchemaFromFile("schemas/user.proto")
+
+// Wrapper types allow null/unset values (unlike regular proto3 primitives)
+userData := map[string]interface{}{
+    "id":             int32(123),
+    "optional_name":  "John Doe",     // google.protobuf.StringValue
+    "optional_age":   int32(30),      // google.protobuf.Int32Value  
+    "optional_score": nil,            // Unset wrapper field (won't be encoded)
+}
+
+// Marshal with wrapper types
+protobufData, err := proto.MarshalWithSchema(userData, "User")
+
+// Unmarshal preserves null semantics
+result, err := proto.UnmarshalWithSchema(protobufData, "User")
+// result["optional_score"] will be nil (not default value)
+```
+
+**Supported Wrapper Types:**
+- `google.protobuf.StringValue`, `google.protobuf.BytesValue`
+- `google.protobuf.Int32Value`, `google.protobuf.Int64Value`
+- `google.protobuf.UInt32Value`, `google.protobuf.UInt64Value`
+- `google.protobuf.BoolValue`, `google.protobuf.FloatValue`, `google.protobuf.DoubleValue`
+
 ---
 
 ## 🧪 Supported Types
@@ -223,6 +251,7 @@ fmt.Printf("Encoded %d bytes\n", len(protobufData))
 - ✅ **Enums** - Named constants with validation
 - ✅ **Repeated Fields** - Arrays and lists
 - ✅ **Oneof Fields** - Union types for mutually exclusive fields
+- ✅ **Wrapper Types** - Google protobuf wrappers (StringValue, Int32Value, etc.)
 
 ### Wire Format Support
 - ✅ **Varint** - Variable-length integers
@@ -334,7 +363,7 @@ The sample app demonstrates all protobuf features including oneof, nested messag
 - ❌ **google.protobuf.Any** - Type erasure/dynamic types
 - ❌ **google.protobuf.Timestamp** - No automatic time conversion
 - ❌ **google.protobuf.Duration** - No automatic duration parsing
-- ❌ **google.protobuf.Wrapper** - Value wrapper types (StringValue, Int32Value, etc.)
+- ✅ **google.protobuf.Wrapper** - Value wrapper types (StringValue, Int32Value, etc.)
 - ❌ **google.protobuf.FieldMask** - Field selection masks
 - ❌ **google.protobuf.Struct** - Dynamic JSON-like structures
 - ❌ **google.protobuf.Empty** - Empty message type
