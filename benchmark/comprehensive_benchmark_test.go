@@ -42,13 +42,13 @@ func setupBenchmarkData() {
 	var err error
 
 	// Setup Protolite client
-	protoliteClient = protolite.NewProtolite()
-	err = protoliteClient.LoadSchemaFromFile("proto/post.proto")
+	protoliteClient = protolite.NewProtolite([]string{"proto"})
+	err = protoliteClient.LoadSchemaFromFile("post.proto")
 	if err != nil {
 		panic("Failed to load post schema: " + err.Error())
 	}
 
-	err = protoliteClient.LoadSchemaFromFile("proto/user.proto")
+	err = protoliteClient.LoadSchemaFromFile("user.proto")
 	if err != nil {
 		panic("Failed to load schema: " + err.Error())
 	}

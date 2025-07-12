@@ -460,7 +460,7 @@ func TestDecoder_NestedMessages(t *testing.T) {
 	}
 
 	// Create a registry and populate it
-	reg := registry.NewRegistry()
+	reg := registry.NewRegistry([]string{""})
 
 	// First, encode the nested message separately
 	nestedData := map[string]interface{}{

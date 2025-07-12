@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	proto := protolite.NewProtolite()
+	proto := protolite.NewProtolite([]string{"testdata",""})
 
 	// Load proto files - load post.proto first since user.proto imports it
 	err := proto.LoadSchemaFromFile("testdata/post.proto")

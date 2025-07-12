@@ -290,8 +290,8 @@ func toSnakeCase(s string) string {
 	return string(result)
 }
 
-func NewProtolite() Protolite {
+func NewProtolite(ProtoDirectories []string) Protolite {
 	return &protolite{
-		registry: registry.NewRegistry(),
+		registry: registry.NewRegistry(ProtoDirectories),
 	}
 }

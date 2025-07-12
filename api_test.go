@@ -10,7 +10,7 @@ import (
 )
 
 func TestProtolite_Parse(t *testing.T) {
-	proto := NewProtolite()
+	proto := NewProtolite([]string{""})
 
 	t.Run("empty_data", func(t *testing.T) {
 		result, err := proto.Parse([]byte{})
@@ -113,7 +113,7 @@ func TestProtolite_Parse(t *testing.T) {
 }
 
 func TestProtolite_WithSchema(t *testing.T) {
-	proto := NewProtolite()
+	proto := NewProtolite([]string{""})
 
 	// Define a test message schema
 	testMessage := &schema.Message{
@@ -362,7 +362,7 @@ func TestProtolite_setFieldValue(t *testing.T) {
 }
 
 func TestProtolite_SchemaRequired(t *testing.T) {
-	proto := NewProtolite()
+	proto := NewProtolite([]string{""})
 
 	t.Run("load_schema_from_file", func(t *testing.T) {
 		// Test that LoadSchemaFromFile works (even if the file doesn't exist, it should return a proper error)
@@ -425,7 +425,7 @@ func TestProtolite_Integration(t *testing.T) {
 		}
 
 		// Parse without schema using Protolite
-		proto := NewProtolite()
+		proto := NewProtolite([]string{""})
 		parsedData, err := proto.Parse(encodedData)
 		if err != nil {
 			t.Fatalf("Failed to parse: %v", err)
@@ -475,7 +475,7 @@ func TestProtolite_Integration(t *testing.T) {
 }
 
 func TestProtolite_UnmarshalWithSchema(t *testing.T) {
-	proto := NewProtolite()
+	proto := NewProtolite([]string{"","sampleapp/testdata"})
 
 	t.Run("unmarshal_with_schema", func(t *testing.T) {
 		if err := proto.LoadSchemaFromFile("sampleapp/testdata/post.proto"); err != nil {

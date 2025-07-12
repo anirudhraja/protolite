@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewRegistry(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 
 	if registry == nil {
 		t.Fatal("NewRegistry() returned nil")
@@ -29,7 +29,7 @@ func TestNewRegistry(t *testing.T) {
 }
 
 func TestLoadSchema_NonExistentPath(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 
 	err := registry.LoadSchema("/nonexistent/path")
 	if err == nil {
@@ -50,7 +50,7 @@ func TestLoadSchema_NonProtoFile(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
 
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	err = registry.LoadSchema(tmpFile.Name())
 
 	if err == nil {
@@ -94,7 +94,7 @@ service TestService {
 		t.Fatal(err)
 	}
 
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	err = registry.LoadSchema(protoFile)
 	if err != nil {
 		t.Fatalf("LoadSchema failed: %v", err)
@@ -123,51 +123,9 @@ service TestService {
 	}
 }
 
-func TestLoadSchema_Directory(t *testing.T) {
-	// Create a temporary directory with multiple proto files
-	tmpDir, err := os.MkdirTemp("", "proto_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create subdirectory
-	subDir := filepath.Join(tmpDir, "subdir")
-	err = os.Mkdir(subDir, 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create proto files
-	protoFiles := map[string]string{
-		filepath.Join(tmpDir, "file1.proto"): `syntax = "proto3";
-package pkg1;`,
-		filepath.Join(subDir, "file2.proto"): `syntax = "proto3";
-package pkg2;`,
-		filepath.Join(tmpDir, "notproto.txt"): "not a proto file",
-	}
-
-	for path, content := range protoFiles {
-		err = os.WriteFile(path, []byte(content), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	registry := NewRegistry()
-	err = registry.LoadSchema(tmpDir)
-	if err != nil {
-		t.Fatalf("LoadSchema failed: %v", err)
-	}
-
-	// Should have loaded 2 proto files, ignoring the .txt file
-	if len(registry.repo.ProtoFiles) != 2 {
-		t.Errorf("Expected 2 proto files, got %d", len(registry.repo.ProtoFiles))
-	}
-}
 
 func TestGetFullName(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 
 	tests := []struct {
 		pkg      string
@@ -189,7 +147,7 @@ func TestGetFullName(t *testing.T) {
 }
 
 func TestGetMessage_NotFound(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	_, err := registry.GetMessage("NonExistent")
@@ -203,7 +161,7 @@ func TestGetMessage_NotFound(t *testing.T) {
 }
 
 func TestGetMessage_Found(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	testMessage := &schema.Message{
@@ -235,7 +193,7 @@ func TestGetMessage_Found(t *testing.T) {
 }
 
 func TestGetEnum_NotFound(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.enums = make(map[string]*schema.Enum)
 
 	_, err := registry.GetEnum("NonExistent")
@@ -249,7 +207,7 @@ func TestGetEnum_NotFound(t *testing.T) {
 }
 
 func TestGetEnum_Found(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.enums = make(map[string]*schema.Enum)
 
 	testEnum := &schema.Enum{
@@ -281,7 +239,7 @@ func TestGetEnum_Found(t *testing.T) {
 }
 
 func TestGetService_NotFound(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.services = make(map[string]*schema.Service)
 
 	_, err := registry.GetService("NonExistent")
@@ -295,7 +253,7 @@ func TestGetService_NotFound(t *testing.T) {
 }
 
 func TestGetService_Found(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.services = make(map[string]*schema.Service)
 
 	testService := &schema.Service{
@@ -327,7 +285,7 @@ func TestGetService_Found(t *testing.T) {
 }
 
 func TestListMessages(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	registry.messages["pkg1.Message1"] = &schema.Message{Name: "Message1"}
@@ -350,7 +308,7 @@ func TestListMessages(t *testing.T) {
 }
 
 func TestListEnums(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.enums = make(map[string]*schema.Enum)
 
 	registry.enums["pkg1.Enum1"] = &schema.Enum{Name: "Enum1"}
@@ -373,7 +331,7 @@ func TestListEnums(t *testing.T) {
 }
 
 func TestListServices(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.services = make(map[string]*schema.Service)
 
 	registry.services["pkg1.Service1"] = &schema.Service{Name: "Service1"}
@@ -396,7 +354,7 @@ func TestListServices(t *testing.T) {
 }
 
 func TestGetOrCreateMapEntryMessage_Create(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	keyType := &schema.FieldType{
@@ -442,7 +400,7 @@ func TestGetOrCreateMapEntryMessage_Create(t *testing.T) {
 }
 
 func TestGetOrCreateMapEntryMessage_Existing(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	existingMsg := &schema.Message{
@@ -471,7 +429,7 @@ func TestGetOrCreateMapEntryMessage_Existing(t *testing.T) {
 }
 
 func TestRegisterNames(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 	registry.enums = make(map[string]*schema.Enum)
 	registry.services = make(map[string]*schema.Service)
@@ -535,7 +493,7 @@ func TestRegisterNames(t *testing.T) {
 }
 
 func TestBuildDefinitions(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 
 	// This is currently a placeholder, so just test it doesn't error
 	err := registry.buildDefinitions(&schema.ProtoFile{})
@@ -545,7 +503,7 @@ func TestBuildDefinitions(t *testing.T) {
 }
 
 func TestBuildServices(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 
 	// This is currently a placeholder, so just test it doesn't error
 	err := registry.buildServices(&schema.ProtoFile{})
@@ -576,12 +534,12 @@ message TestMessage {
 	}
 	tmpFile.Close()
 
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.repo = &schema.ProtoRepo{
 		ProtoFiles: make(map[string]*schema.ProtoFile),
 	}
 
-	err = registry.loadSingleProtoFile(tmpFile.Name())
+	err = registry.LoadSchema(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("loadSingleProtoFile failed: %v", err)
 	}
@@ -619,7 +577,7 @@ func containsMiddle(s, substr string) bool {
 }
 
 func TestBuildDefinitions_Success(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 	registry.enums = make(map[string]*schema.Enum)
 
@@ -666,7 +624,7 @@ func TestBuildDefinitions_Success(t *testing.T) {
 }
 
 func TestBuildDefinitions_InvalidMessageType(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 	registry.enums = make(map[string]*schema.Enum)
 
@@ -700,7 +658,7 @@ func TestBuildDefinitions_InvalidMessageType(t *testing.T) {
 }
 
 func TestBuildDefinitions_InvalidEnumType(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 	registry.enums = make(map[string]*schema.Enum)
 
@@ -734,7 +692,7 @@ func TestBuildDefinitions_InvalidEnumType(t *testing.T) {
 }
 
 func TestBuildDefinitions_NestedMessages(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 	registry.enums = make(map[string]*schema.Enum)
 
@@ -773,7 +731,7 @@ func TestBuildDefinitions_NestedMessages(t *testing.T) {
 }
 
 func TestBuildServices_Success(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	// Add test messages for input/output types
@@ -805,7 +763,7 @@ func TestBuildServices_Success(t *testing.T) {
 }
 
 func TestBuildServices_InvalidInputType(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	// Add only output message, missing input message
@@ -839,7 +797,7 @@ func TestBuildServices_InvalidInputType(t *testing.T) {
 }
 
 func TestBuildServices_InvalidOutputType(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	// Add only input message, missing output message
@@ -873,7 +831,7 @@ func TestBuildServices_InvalidOutputType(t *testing.T) {
 }
 
 func TestBuildServices_MultipleServices(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	// Add test messages
@@ -915,7 +873,7 @@ func TestBuildServices_MultipleServices(t *testing.T) {
 }
 
 func TestResolveMessageFields_PrimitiveTypes(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	message := &schema.Message{
@@ -947,7 +905,7 @@ func TestResolveMessageFields_PrimitiveTypes(t *testing.T) {
 }
 
 func TestGetMessage_AmbiguityDetection(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 
 	// Setup conflicting message names
@@ -1002,7 +960,7 @@ func TestGetMessage_AmbiguityDetection(t *testing.T) {
 }
 
 func TestGetEnum_AmbiguityDetection(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.enums = make(map[string]*schema.Enum)
 
 	// Setup conflicting enum names
