@@ -221,6 +221,9 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 
 	// Decode the wrapper value field (field number 1)
 	if wrapperDecoder.pos >= len(wrapperDecoder.buf) {
+		if wrapperType == schema.WrapperBoolValue {
+			return false, nil
+		}
 		// Empty wrapper message means nil value
 		return nil, nil
 	}
