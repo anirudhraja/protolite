@@ -221,8 +221,29 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 
 	// Decode the wrapper value field (field number 1)
 	if wrapperDecoder.pos >= len(wrapperDecoder.buf) {
-		// Empty wrapper message means nil value
-		return nil, nil
+		switch wrapperType {
+		case schema.WrapperDoubleValue:
+			return float64(0), nil
+		case schema.WrapperFloatValue:
+			return float32(0), nil
+		case schema.WrapperInt64Value:
+			return int64(0), nil
+		case schema.WrapperUInt64Value:
+			return uint64(0), nil
+		case schema.WrapperInt32Value:
+			return int32(0), nil
+		case schema.WrapperUInt32Value:
+			return uint32(0), nil
+		case schema.WrapperBoolValue:
+			return false, nil
+		case schema.WrapperStringValue:
+			return "", nil
+		case schema.WrapperBytesValue:
+			return []byte{}, nil
+		default:
+			// Empty wrapper message means nil value
+			return nil, nil
+		}
 	}
 
 	// Decode the field tag
