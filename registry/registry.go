@@ -1,30 +1,36 @@
 package registry
 
 import (
-	"bytes"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/anirudhraja/protolite/schema"
-	protoparser "github.com/yoheimuta/go-protoparser/v4"
 	protoparserparser "github.com/yoheimuta/go-protoparser/v4/parser"
 )
 
 // Registry allows us to store the schema of the protobuf messages. We look this up when we need to parse or marshal a message.
 type Registry struct {
-	repo     *schema.ProtoRepo
-	messages map[string]*schema.Message // fully qualified name -> message
-	enums    map[string]*schema.Enum    // fully qualified name -> enum
-	services map[string]*schema.Service // fully qualified name -> service
-
+	repo             *schema.ProtoRepo
+	messages         map[string]*schema.Message          // fully qualified name -> message
+	enums            map[string]*schema.Enum             // fully qualified name -> enum
+	services         map[string]*schema.Service          // fully qualified name -> service
+	protoEntities    map[string]*protoFileEntity         // for each proto store the entities so its easy to refer
+	parsedProtoBody  map[string]*protoparserparser.Proto // just a cache to avoid parsing proto body
+	ProtoDirectories []string                            // list of directories to search for the imported protos
 }
 
-func NewRegistry() *Registry {
-	return &Registry{}
+// preprocessing the proto file to store the proto entities
+type protoFileEntity struct {
+	entities []string
+	imports  []string
+}
+
+func NewRegistry(ProtoDirectories []string) *Registry {
+	return &Registry{
+		ProtoDirectories: ProtoDirectories,
+	}
 }
 
 // LoadSchema Given a path it will recursively scan all *proto files inside it and return schema.ProtoRepo
@@ -39,6 +45,13 @@ func (r *Registry) LoadSchema(protoPath string) error {
 	if r.services == nil {
 		r.services = make(map[string]*schema.Service)
 	}
+	if r.protoEntities == nil {
+		r.protoEntities = map[string]*protoFileEntity{}
+	}
+	// Initialize the repo if not already done
+	if r.parsedProtoBody == nil {
+		r.parsedProtoBody = map[string]*protoparserparser.Proto{}
+	}
 
 	// Initialize the repo if not already done
 	if r.repo == nil {
@@ -46,47 +59,29 @@ func (r *Registry) LoadSchema(protoPath string) error {
 			ProtoFiles: make(map[string]*schema.ProtoFile),
 		}
 	}
-
-	// Check if the path exists
-	info, err := os.Stat(protoPath)
+	allProtoFiles, err := r.getAllProtoInfo(protoPath)
 	if err != nil {
-		return fmt.Errorf("path does not exist: %w", err)
+		return err
 	}
 
-	// If it's a single file, process it directly
-	if !info.IsDir() {
-		if strings.HasSuffix(protoPath, ".proto") {
-			if err := r.loadSingleProtoFile(protoPath); err != nil {
-				return fmt.Errorf("failed to load proto file: %w", err)
-			}
-		} else {
-			return fmt.Errorf("file %s is not a .proto file", protoPath)
-		}
-	} else {
-		// If it's a directory, walk through it recursively
-		err = filepath.WalkDir(protoPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-
-			// Skip directories and non-proto files
-			if d.IsDir() || !strings.HasSuffix(path, ".proto") {
-				return nil
-			}
-
-			// Load the proto file
-			if err := r.loadSingleProtoFile(path); err != nil {
-				return fmt.Errorf("failed to load proto file %s: %w", path, err)
-			}
-
-			return nil
-		})
-
+	for _, protoPath := range allProtoFiles {
+		// resolves and stores the type in proto file
+		protoFileEntity, err := r.resolveProtoFile(protoPath)
 		if err != nil {
-			return fmt.Errorf("failed to walk directory: %w", err)
+			return fmt.Errorf("failed to load proto file: %w", err)
+		}
+		ent, ok := r.protoEntities[protoPath]
+		if !ok {
+			return fmt.Errorf("failed to get proto entities for file %s:", protoPath)
+		}
+		ent.entities = protoFileEntity
+	}
+	for _, protoPath := range allProtoFiles {
+		// loadSingleProtoFile processes the proto file
+		if err := r.loadSingleProtoFile(protoPath); err != nil {
+			return fmt.Errorf("failed to load proto file: %w", err)
 		}
 	}
-
 	// After loading all files, populate the registry maps
 	if err := r.buildSymbolTable(); err != nil {
 		return fmt.Errorf("failed to build symbol table: %w", err)
@@ -95,18 +90,66 @@ func (r *Registry) LoadSchema(protoPath string) error {
 	return nil
 }
 
+func (r *Registry) resolveProtoFile(protoPath string) ([]string, error) {
+	parsedProtoBody, ok := r.parsedProtoBody[protoPath]
+	if !ok {
+		return nil, fmt.Errorf("cannot find parsed proto body for: %s", protoPath)
+	}
+	allEntities := make([]string, 0)
+	packageName := ""
+	for _, entity := range parsedProtoBody.ProtoBody {
+		switch b := entity.(type) {
+		case *protoparserparser.Package:
+			packageName = b.Name
+		}
+		if packageName != ""{
+			break
+		}
+	}
+	allEntities = append(allEntities, addNestedEntities(parsedProtoBody.ProtoBody, packageName, packageName)...)
+	return allEntities, nil
+}
+func addNestedEntities(entites []protoparserparser.Visitee, prefix, packageName string) []string {
+	result := []string{}
+	if prefix != packageName {
+		result = append(result, prefix)
+	}
+	prefix = prefix + "."
+	for _, entity := range entites {
+		switch b := entity.(type) {
+		case *protoparserparser.Message:
+			result = append(result, addNestedEntities(b.MessageBody, prefix+b.MessageName, packageName)...)
+
+		case *protoparserparser.Enum:
+			result = append(result, prefix+b.EnumName)
+		}
+	}
+	return result
+
+}
+
+func (r *Registry) getAllEntities(filePath string) map[string]struct{} {
+	res := make(map[string]struct{})
+	allEntities := r.protoEntities[filePath]
+	for _, file := range allEntities.imports {
+		for _, entities := range r.protoEntities[file].entities {
+			res[entities] = struct{}{}
+		}
+	}
+	for _, entities := range allEntities.entities {
+		res[entities] = struct{}{}
+	}
+	return res
+}
+
 // loadSingleProtoFile loads and parses a single .proto file
 func (r *Registry) loadSingleProtoFile(filePath string) error {
+	parsedProtoBody, ok := r.parsedProtoBody[filePath]
+	if !ok {
+		return fmt.Errorf("cannot find parsed proto body for: %s", filePath)
+	}
+	allResolvedEntities := r.getAllEntities(filePath)
 
-	protoBytes, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
-	}
-	buf := bytes.NewBuffer(protoBytes)
-	parsedBody, err := protoparser.Parse(buf)
-	if err != nil {
-		return err
-	}
 	protoFile := &schema.ProtoFile{
 		Name:     filepath.Base(filePath),
 		Syntax:   "proto3", // Default
@@ -115,8 +158,9 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 		Enums:    []*schema.Enum{},
 		Services: []*schema.Service{},
 	}
+
 	// preprocess the imports first and add package name to each entity
-	for _, body := range parsedBody.ProtoBody {
+	for _, body := range parsedProtoBody.ProtoBody {
 		switch b := body.(type) {
 
 		case *protoparserparser.Package:
@@ -135,7 +179,7 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 			}
 			protoFile.Imports = append(protoFile.Imports, singleImport)
 		case *protoparserparser.Message:
-			msg, err := r.processMessage(b)
+			msg, err := r.processMessage(b, allResolvedEntities, protoFile.Package)
 			if err != nil {
 				return fmt.Errorf("Unable to process message: %v", b.MessageName)
 			}
@@ -161,10 +205,11 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 }
 
 // parseMessage parses a message definition starting from the given line index
-func (r *Registry) processMessage(message *protoparserparser.Message) (*schema.Message, error) {
+func (r *Registry) processMessage(message *protoparserparser.Message, allResolvedEntities map[string]struct{}, prefix string) (*schema.Message, error) {
 	msg := &schema.Message{
 		Name: message.MessageName,
 	}
+	prefix = prefix + "." + message.MessageName
 	nestedEnums := make([]*schema.Enum, 0)
 	nestedTypes := make([]*schema.Message, 0)
 	fields := make([]*schema.Field, 0)
@@ -178,19 +223,19 @@ func (r *Registry) processMessage(message *protoparserparser.Message) (*schema.M
 			}
 			nestedEnums = append(nestedEnums, enum)
 		case *protoparserparser.Message:
-			msg, err := r.processMessage(b)
+			msg, err := r.processMessage(b, allResolvedEntities, prefix)
 			if err != nil {
 				return nil, err
 			}
 			nestedTypes = append(nestedTypes, msg)
 		case *protoparserparser.Field:
-			field, err := r.processField(b)
+			field, err := r.processField(b, allResolvedEntities, prefix)
 			if err != nil {
 				return nil, err
 			}
 			fields = append(fields, field)
 		case *protoparserparser.MapField:
-			field, err := r.processMapField(b)
+			field, err := r.processMapField(b, allResolvedEntities, prefix)
 			if err != nil {
 				return nil, err
 			}
@@ -202,12 +247,16 @@ func (r *Registry) processMessage(message *protoparserparser.Message) (*schema.M
 				if err != nil {
 					return nil, err
 				}
+				fieldType,err:= r.convertProtoType(field.Type, allResolvedEntities, prefix)
+				if err!=nil{
+					return nil,err
+				}
 				fieldLabel := schema.LabelOptional
 				f := &schema.Field{
 					Name:   field.FieldName,
 					Number: int32(fieldNumber),
 					Label:  fieldLabel,
-					Type:   *r.convertProtoType(field.Type),
+					Type:   *fieldType,
 				}
 				oneOfFields = append(oneOfFields, f)
 			}
@@ -225,7 +274,7 @@ func (r *Registry) processMessage(message *protoparserparser.Message) (*schema.M
 	return msg, nil
 }
 
-func (r *Registry) processField(field *protoparserparser.Field) (*schema.Field, error) {
+func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities map[string]struct{}, prefix string) (*schema.Field, error) {
 	fieldNumber, err := strconv.ParseInt(field.FieldNumber, 10, 32)
 	if err != nil {
 		return nil, err
@@ -236,17 +285,29 @@ func (r *Registry) processField(field *protoparserparser.Field) (*schema.Field, 
 	} else if field.IsRequired {
 		fieldLabel = schema.LabelRequired
 	}
+	fieldType,err := r.convertProtoType(field.Type, resolvedEntities, prefix)
+	if err!=nil {
+		return nil,err
+	}
 	f := &schema.Field{
 		Name:   field.FieldName,
 		Number: int32(fieldNumber),
 		Label:  fieldLabel,
-		Type:   *r.convertProtoType(field.Type),
+		Type:   *fieldType,
 	}
 	return f, nil
 }
 
-func (r *Registry) processMapField(field *protoparserparser.MapField) (*schema.Field, error) {
+func (r *Registry) processMapField(field *protoparserparser.MapField, resolvedEntities map[string]struct{}, prefix string) (*schema.Field, error) {
 	fieldNumber, err := strconv.ParseInt(field.FieldNumber, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	mapKeyType, err := r.convertProtoType(field.KeyType, resolvedEntities, prefix)
+	if err != nil {
+		return nil, err
+	}
+	mapValueType, err := r.convertProtoType(field.Type, resolvedEntities, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -256,8 +317,8 @@ func (r *Registry) processMapField(field *protoparserparser.MapField) (*schema.F
 		Label:  schema.LabelOptional,
 		Type: schema.FieldType{
 			Kind:     schema.KindMap,
-			MapKey:   r.convertProtoType(field.KeyType),
-			MapValue: r.convertProtoType(field.Type),
+			MapKey:   mapKeyType,
+			MapValue: mapValueType,
 		},
 	}
 	return f, nil
@@ -308,49 +369,54 @@ func (r *Registry) processEnum(enum *protoparserparser.Enum) (*schema.Enum, erro
 }
 
 // convertProtoType converts a protobuf type string to a FieldType
-func (r *Registry) convertProtoType(protoType string) *schema.FieldType {
+func (r *Registry) convertProtoType(protoType string, allResolvedEntities map[string]struct{}, prefix string) (*schema.FieldType, error) {
 	switch protoType {
 	case "int32":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt32}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt32}, nil
 	case "int64":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt64}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt64}, nil
 	case "uint32":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint32}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint32}, nil
 	case "uint64":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint64}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint64}, nil
 	case "string":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeString}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeString}, nil
 	case "bytes":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeBytes}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeBytes}, nil
 	case "bool":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeBool}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeBool}, nil
 	case "float":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeFloat}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeFloat}, nil
 	case "double":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeDouble}
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeDouble}, nil
 	// Google protobuf wrapper types
 	case "google.protobuf.DoubleValue":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperDoubleValue}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperDoubleValue}, nil
 	case "google.protobuf.FloatValue":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperFloatValue}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperFloatValue}, nil
 	case "google.protobuf.Int64Value":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperInt64Value}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperInt64Value}, nil
 	case "google.protobuf.UInt64Value":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperUInt64Value}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperUInt64Value}, nil
 	case "google.protobuf.Int32Value":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperInt32Value}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperInt32Value}, nil
 	case "google.protobuf.UInt32Value":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperUInt32Value}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperUInt32Value}, nil
 	case "google.protobuf.BoolValue":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperBoolValue}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperBoolValue}, nil
 	case "google.protobuf.StringValue":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperStringValue}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperStringValue}, nil
 	case "google.protobuf.BytesValue":
-		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperBytesValue}
+		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperBytesValue}, nil
 	default:
 		// For non-primitive types, we need to determine if it's an enum or message
 		// This will be resolved later in buildDefinitions after all types are registered
-		return &schema.FieldType{Kind: schema.KindMessage, MessageType: protoType}
+		// TODO handle error
+		fullResolvedType, err := getReferencedType(protoType, prefix, allResolvedEntities)
+		if err != nil {
+			return nil, err
+		}
+		return &schema.FieldType{Kind: schema.KindMessage, MessageType: fullResolvedType}, nil
 	}
 }
 

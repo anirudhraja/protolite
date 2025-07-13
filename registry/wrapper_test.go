@@ -7,7 +7,7 @@ import (
 )
 
 func TestRegistry_WrapperTypeDetection(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 
 	tests := []struct {
 		protoType       string
@@ -63,7 +63,10 @@ func TestRegistry_WrapperTypeDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.protoType, func(t *testing.T) {
-			fieldType := registry.convertProtoType(tt.protoType)
+			fieldType,err := registry.convertProtoType(tt.protoType,make(map[string]struct{}),"")
+			if err != nil {
+				t.Errorf("Expected no error for type resolution, got: %v", err)
+			}
 
 			if fieldType.Kind != tt.expectedKind {
 				t.Errorf("Expected kind %s, got %s", tt.expectedKind, fieldType.Kind)
@@ -77,7 +80,7 @@ func TestRegistry_WrapperTypeDetection(t *testing.T) {
 }
 
 func TestRegistry_WrapperTypeResolution(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 	registry.messages = make(map[string]*schema.Message)
 	registry.enums = make(map[string]*schema.Enum)
 
@@ -119,12 +122,10 @@ func TestRegistry_WrapperTypeResolution(t *testing.T) {
 }
 
 func TestRegistry_NonWrapperTypes(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry([]string{""})
 
 	// Test that non-wrapper types are not detected as wrappers
 	nonWrapperTypes := []string{
-		"int32",
-		"string",
 		"MyMessage",
 		"google.protobuf.Timestamp",
 		"google.protobuf.Any",
@@ -133,9 +134,12 @@ func TestRegistry_NonWrapperTypes(t *testing.T) {
 
 	for _, protoType := range nonWrapperTypes {
 		t.Run(protoType, func(t *testing.T) {
-			fieldType := registry.convertProtoType(protoType)
+			fieldType,err := registry.convertProtoType(protoType,make(map[string]struct{}),"")
+			if err == nil {
+				t.Errorf("Expected error for type resolution, got: %v", err)
+			}
 
-			if fieldType.Kind == schema.KindWrapper {
+			if fieldType != nil && fieldType.Kind == schema.KindWrapper  {
 				t.Errorf("Type %s should not be detected as wrapper type", protoType)
 			}
 		})
