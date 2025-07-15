@@ -271,7 +271,7 @@ func (me *MapEncoder) encodeMapField(encoder *Encoder, fieldValue interface{}, f
 	case schema.KindMessage:
 		return me.encodeMessageField(encoder, fieldValue)
 	case schema.KindEnum:
-		return me.encodeEnumField(encoder, fieldValue)
+		return me.encodeEnumField(encoder, fieldValue, fieldType)
 	default:
 		return fmt.Errorf("unsupported map field type: %s", fieldType.Kind)
 	}
@@ -281,32 +281,59 @@ func (me *MapEncoder) encodeMapField(encoder *Encoder, fieldValue interface{}, f
 func (me *MapEncoder) encodePrimitiveField(encoder *Encoder, value interface{}, primitiveType schema.PrimitiveType) error {
 	switch primitiveType {
 	case schema.TypeString:
-		be := NewBytesEncoder(encoder)
-		return be.EncodeString(value.(string))
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("expected string, got %T", value)
+		}
+		return NewBytesEncoder(encoder).EncodeString(v)
 	case schema.TypeBytes:
-		be := NewBytesEncoder(encoder)
-		return be.EncodeBytes(value.([]byte))
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("expected []byte, got %T", value)
+		}
+		return NewBytesEncoder(encoder).EncodeBytes(v)
 	case schema.TypeInt32:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeInt32(value.(int32))
+		v, ok := value.(int32)
+		if !ok {
+			return fmt.Errorf("expected int32, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeInt32(v)
 	case schema.TypeInt64:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeInt64(value.(int64))
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("expected int64, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeInt64(v)
 	case schema.TypeUint32:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeUint32(value.(uint32))
+		v, ok := value.(uint32)
+		if !ok {
+			return fmt.Errorf("expected uint32, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeUint32(v)
 	case schema.TypeUint64:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeUint64(value.(uint64))
+		v, ok := value.(uint64)
+		if !ok {
+			return fmt.Errorf("expected uint64, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeUint64(v)
 	case schema.TypeBool:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeBool(value.(bool))
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("expected bool, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeBool(v)
 	case schema.TypeFloat:
-		fe := NewFixedEncoder(encoder)
-		return fe.EncodeFloat32(value.(float32))
+		v, ok := value.(float32)
+		if !ok {
+			return fmt.Errorf("expected float32, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeFloat32(v)
 	case schema.TypeDouble:
-		fe := NewFixedEncoder(encoder)
-		return fe.EncodeFloat64(value.(float64))
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("expected float64, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeFloat64(v)
 	default:
 		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
 	}
@@ -324,14 +351,22 @@ func (me *MapEncoder) encodeMessageField(encoder *Encoder, value interface{}) er
 }
 
 // encodeEnumField encodes an enum field
-func (me *MapEncoder) encodeEnumField(encoder *Encoder, value interface{}) error {
-	enumValue, ok := value.(int32)
+func (me *MapEncoder) encodeEnumField(encoder *Encoder, value interface{}, fieldType *schema.FieldType) error {
+	enumValue, ok := value.(string)
 	if !ok {
-		return fmt.Errorf("enum value must be int32")
+		return fmt.Errorf("enum value must be string for %s", fieldType.EnumType)
 	}
-
-	ve := NewVarintEncoder(encoder)
-	return ve.EncodeEnum(enumValue)
+	enum, err := me.encoder.registry.GetEnum(fieldType.EnumType)
+	if err != nil {
+		return fmt.Errorf("unknown enum %s received for enum , with value %v", fieldType.EnumType, value)
+	}
+	for _, en := range enum.Values {
+		if en.Name == enumValue {
+			ve := NewVarintEncoder(encoder)
+			return ve.EncodeEnum(en.Number)
+		}
+	}
+	return fmt.Errorf("cannot find field value %s in the enum %v", enumValue, enum.Values)
 }
 
 // getWireType returns the wire type for a field type

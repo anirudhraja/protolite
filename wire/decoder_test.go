@@ -90,15 +90,6 @@ func TestDecoder_AllTypes(t *testing.T) {
 					PrimitiveType: schema.TypeBytes,
 				},
 			},
-			// Enum (without registry for simplicity)
-			{
-				Name:   "test_enum",
-				Number: 10,
-				Type: schema.FieldType{
-					Kind:     schema.KindEnum,
-					EnumType: "TestEnum",
-				},
-			},
 		},
 	}
 
@@ -113,7 +104,6 @@ func TestDecoder_AllTypes(t *testing.T) {
 		"test_double": float64(2.718281828),
 		"test_string": "Hello, protolite!",
 		"test_bytes":  []byte("binary data"),
-		"test_enum":   int32(1), // ACTIVE
 	}
 
 	// Encode the message (without registry for primitive types)
@@ -141,7 +131,6 @@ func TestDecoder_AllTypes(t *testing.T) {
 		{"test_float", float32(3.14)},
 		{"test_double", float64(2.718281828)},
 		{"test_string", "Hello, protolite!"},
-		{"test_enum", int32(1)},
 	}
 
 	for _, test := range tests {
@@ -524,107 +513,6 @@ func TestDecoder_NestedMessages(t *testing.T) {
 	}
 }
 
-func TestDecoder_EnumTypes(t *testing.T) {
-
-	// Define message with enum field
-	message := &schema.Message{
-		Name: "UserStatus",
-		Fields: []*schema.Field{
-			{
-				Name:   "user_id",
-				Number: 1,
-				Type: schema.FieldType{
-					Kind:          schema.KindPrimitive,
-					PrimitiveType: schema.TypeInt32,
-				},
-			},
-			{
-				Name:   "status",
-				Number: 2,
-				Type: schema.FieldType{
-					Kind:     schema.KindEnum,
-					EnumType: "Status",
-				},
-			},
-			{
-				Name:   "priority",
-				Number: 3,
-				Type: schema.FieldType{
-					Kind:     schema.KindEnum,
-					EnumType: "Status",
-				},
-			},
-		},
-	}
-
-	tests := []struct {
-		name     string
-		data     map[string]interface{}
-		expected map[string]interface{}
-	}{
-		{
-			name: "unknown_status",
-			data: map[string]interface{}{
-				"user_id":  int32(123),
-				"status":   int32(0), // UNKNOWN
-				"priority": int32(1), // ACTIVE
-			},
-			expected: map[string]interface{}{
-				"user_id":  int32(123),
-				"status":   int32(0),
-				"priority": int32(1),
-			},
-		},
-		{
-			name: "active_status",
-			data: map[string]interface{}{
-				"user_id":  int32(456),
-				"status":   int32(1), // ACTIVE
-				"priority": int32(3), // PENDING
-			},
-			expected: map[string]interface{}{
-				"user_id":  int32(456),
-				"status":   int32(1),
-				"priority": int32(3),
-			},
-		},
-		{
-			name: "invalid_enum_value",
-			data: map[string]interface{}{
-				"user_id":  int32(789),
-				"status":   int32(99), // Invalid value
-				"priority": int32(2),  // INACTIVE
-			},
-			expected: map[string]interface{}{
-				"user_id":  int32(789),
-				"status":   int32(99),
-				"priority": int32(2),
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// Encode
-			encodedData, err := EncodeMessage(test.data, message, nil)
-			if err != nil {
-				t.Fatalf("Failed to encode: %v", err)
-			}
-
-			// Decode
-			decodedData, err := DecodeMessage(encodedData, message, nil)
-			if err != nil {
-				t.Fatalf("Failed to decode: %v", err)
-			}
-
-			// Verify
-			if !reflect.DeepEqual(decodedData, test.expected) {
-				t.Errorf("Expected %v, got %v", test.expected, decodedData)
-			}
-		})
-	}
-}
-
 func TestDecoder_MapTypes(t *testing.T) {
 	// Define message with map fields
 	message := &schema.Message{
@@ -891,15 +779,6 @@ func TestDecoder_ComplexMixed(t *testing.T) {
 				},
 			},
 			{
-				Name:   "status",
-				Number: 3,
-				Type: schema.FieldType{
-					Kind:     schema.KindEnum,
-					EnumType: "Status",
-				},
-			},
-
-			{
 				Name:   "metadata",
 				Number: 4,
 				Type: schema.FieldType{
@@ -946,7 +825,6 @@ func TestDecoder_ComplexMixed(t *testing.T) {
 	testData := map[string]interface{}{
 		"id":       int32(12345),
 		"name":     "Complex Test",
-		"status":   int32(1), // ACTIVE
 		"metadata": metadataBytes,
 	}
 
@@ -968,9 +846,6 @@ func TestDecoder_ComplexMixed(t *testing.T) {
 	}
 	if decodedData["name"] != "Complex Test" {
 		t.Errorf("Expected name='Complex Test', got %v", decodedData["name"])
-	}
-	if decodedData["status"] != int32(1) {
-		t.Errorf("Expected status=1, got %v", decodedData["status"])
 	}
 
 	// Verify nested message

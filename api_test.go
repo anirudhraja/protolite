@@ -521,14 +521,14 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 			"name":   "John Doe",
 			"email":  "john.doe@example.com",
 			"active": true,
-			"status": int32(1), // ACTIVE
+			"status": "USER_ACTIVE", // ACTIVE
 			"posts": []map[string]interface{}{
 				{
 					"id":         int32(101),
 					"title":      "My First Blog Post",
 					"content":    "This is my first blog post about Go programming and protobuf.",
 					"author_id":  int32(1),
-					"status":     int32(1), // PUBLISHED
+					"status":     "POST_PUBLISHED", // PUBLISHED
 					"tags":       []string{"go", "programming", "protobuf"},
 					"created_at": int64(1640995200), // 2022-01-01 00:00:00 UTC
 					"updated_at": int64(1640995200),
@@ -540,7 +540,7 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 					"title":      "Advanced Protobuf Patterns",
 					"content":    "In this post, I'll share advanced protobuf patterns and best practices.",
 					"author_id":  int32(1),
-					"status":     int32(1), // PUBLISHED
+					"status":     "POST_PUBLISHED", // PUBLISHED
 					"tags":       []string{"protobuf", "advanced", "patterns"},
 					"created_at": int64(1641081600), // 2022-01-02 00:00:00 UTC
 					"updated_at": int64(1641168000), // 2022-01-03 00:00:00 UTC (updated)
@@ -596,7 +596,7 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		if userMap["active"] != true {
 			t.Errorf("Expected user active=true, got %v", userMap["active"])
 		}
-		if userMap["status"] != int32(1) {
+		if userMap["status"] != "USER_ACTIVE" {
 			t.Errorf("Expected user status=1, got %v", userMap["status"])
 		}
 
@@ -626,7 +626,7 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 			if post1["author_id"] != int32(1) {
 				t.Errorf("Expected first post author_id=1, got %v", post1["author_id"])
 			}
-			if post1["status"] != int32(1) {
+			if post1["status"] != "POST_PUBLISHED" {
 				t.Errorf("Expected first post status=1, got %v", post1["status"])
 			}
 			if post1["view_count"] != int32(150) {
@@ -670,7 +670,7 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 			if post2["author_id"] != int32(1) {
 				t.Errorf("Expected second post author_id=1, got %v", post2["author_id"])
 			}
-			if post2["status"] != int32(1) {
+			if post2["status"] != "POST_PUBLISHED" {
 				t.Errorf("Expected second post status=1, got %v", post2["status"])
 			}
 			if post2["view_count"] != int32(275) {

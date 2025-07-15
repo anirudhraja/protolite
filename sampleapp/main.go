@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	proto := protolite.NewProtolite([]string{"testdata",""})
+	proto := protolite.NewProtolite([]string{"testdata", ""})
 
 	// Load proto files - load post.proto first since user.proto imports it
 	err := proto.LoadSchemaFromFile("testdata/post.proto")
@@ -37,8 +37,8 @@ func main() {
 		"id":        int32(1),
 		"name":      "John Doe",
 		"active":    true,
-		"status":    int32(1), // USER_ACTIVE
-		"user_type": int32(1), // USER_TYPE_PREMIUM
+		"status":    "USER_ACTIVE",       // USER_ACTIVE
+		"user_type": "USER_TYPE_PREMIUM", // USER_TYPE_PREMIUM
 
 		// oneof contact_method - using email
 		"email": "john.doe@example.com",
@@ -62,7 +62,7 @@ func main() {
 			"state":       "CA",
 			"country":     "USA",
 			"postal_code": "94105",
-			"type":        int32(0), // ADDRESS_HOME
+			"type":        "ADDRESS_HOME", // ADDRESS_HOME
 
 			// 🎯 NEW: Wrapper types in nested messages
 			"apartment_number": "Apt 4B", // StringValue - set
@@ -72,7 +72,7 @@ func main() {
 			"coordinates": map[string]interface{}{
 				"latitude":  37.7749,
 				"longitude": -122.4194,
-				"system":    int32(0), // COORD_WGS84
+				"system":    "COORD_WGS84", // COORD_WGS84
 			},
 		},
 
@@ -98,14 +98,14 @@ func main() {
 				"display_name": "John Doe 🚀",
 				"bio":          "Software engineer passionate about Go and protobuf",
 				"avatar_url":   "https://example.com/avatar.jpg",
-				"visibility":   int32(0), // PROFILE_PUBLIC
+				"visibility":   "PROFILE_PUBLIC", // PROFILE_PUBLIC
 				"interests":    []string{"golang", "protobuf", "distributed-systems"},
 			},
 			"linkedin": map[string]interface{}{
 				"display_name": "John Doe",
 				"bio":          "Senior Software Engineer",
 				"avatar_url":   "https://linkedin.com/avatar.jpg",
-				"visibility":   int32(2), // PROFILE_FRIENDS_ONLY
+				"visibility":   "PROFILE_FRIENDS_ONLY", // PROFILE_FRIENDS_ONLY
 				"interests":    []string{"technology", "leadership", "innovation"},
 			},
 		},
@@ -116,7 +116,7 @@ func main() {
 				"id":        int32(1),
 				"title":     "New follower",
 				"message":   "Alice started following you",
-				"type":      int32(4), // NOTIF_SOCIAL
+				"type":      "NOTIF_SOCIAL", // NOTIF_SOCIAL
 				"timestamp": int64(1640995200),
 				"read":      false,
 				// oneof notification_data - using user_data
@@ -130,14 +130,14 @@ func main() {
 				"id":        int32(2),
 				"title":     "System maintenance",
 				"message":   "Scheduled maintenance tonight",
-				"type":      int32(5), // NOTIF_SYSTEM
+				"type":      "NOTIF_SYSTEM", // NOTIF_SYSTEM
 				"timestamp": int64(1641081600),
 				"read":      true,
 				// oneof notification_data - using system_data
 				"system_data": map[string]interface{}{
 					"system_message": "Database maintenance scheduled for 2AM-4AM PST",
 					"action_url":     "https://status.example.com",
-					"priority":       int32(1), // PRIORITY_MEDIUM
+					"priority":       "PRIORITY_MEDIUM", // PRIORITY_MEDIUM
 				},
 			},
 		},
@@ -148,19 +148,19 @@ func main() {
 				"id":         int32(101),
 				"title":      "Comprehensive Protobuf Guide",
 				"author_id":  int32(1),
-				"status":     int32(1), // POST_PUBLISHED
+				"status":     "POST_PUBLISHED", // POST_PUBLISHED
 				"tags":       []string{"protobuf", "tutorial", "advanced"},
 				"created_at": int64(1640995200),
 				"updated_at": int64(1640995200),
 				"view_count": int32(1500),
 				"featured":   true,
-				"rating":     int32(0),          // RATING_GENERAL
-				"flags":      []int32{int32(0)}, // FLAG_NONE
+				"rating":     "RATING_GENERAL",      // RATING_GENERAL
+				"flags":      []string{"FLAG_NONE"}, // FLAG_NONE
 
 				// oneof content - using text_content
 				"text_content": map[string]interface{}{
 					"body":       "This is a comprehensive guide to protobuf with oneof, maps, and nested messages...",
-					"format":     int32(1), // TEXT_MARKDOWN
+					"format":     "TEXT_MARKDOWN", // TEXT_MARKDOWN
 					"word_count": int32(2500),
 					"footnotes":  []string{"Protocol Buffers documentation", "gRPC best practices"},
 				},
@@ -171,7 +171,7 @@ func main() {
 						"value":        85.5,
 						"unit":         "percentage",
 						"last_updated": int64(1641000000),
-						"type":         int32(0), // METRIC_ENGAGEMENT
+						"type":         "METRIC_ENGAGEMENT", // METRIC_ENGAGEMENT
 						"history": []map[string]interface{}{
 							{"timestamp": int64(1640995200), "value": 82.1, "label": "day1"},
 							{"timestamp": int64(1641081600), "value": 85.5, "label": "day2"},
@@ -192,7 +192,7 @@ func main() {
 					"technical": map[string]interface{}{
 						"name":          "Technical Articles",
 						"description":   "In-depth technical content",
-						"type":          int32(0), // CATEGORY_PRIMARY
+						"type":          "CATEGORY_PRIMARY", // CATEGORY_PRIMARY
 						"post_count":    int32(25),
 						"subcategories": []string{"programming", "architecture", "tools"},
 					},
@@ -207,7 +207,7 @@ func main() {
 						"content":    "Excellent guide! Very comprehensive.",
 						"created_at": int64(1641000000),
 						"updated_at": int64(1641000000),
-						"status":     int32(0), // COMMENT_VISIBLE
+						"status":     "COMMENT_VISIBLE", // COMMENT_VISIBLE
 						"likes":      int32(15),
 						"pinned":     true,
 						"metadata": map[string]string{
@@ -217,7 +217,7 @@ func main() {
 						// oneof comment_type - using text_comment
 						"text_comment": map[string]interface{}{
 							"formatted_text": "**Excellent** guide! Very comprehensive.",
-							"format":         int32(1), // TEXT_MARKDOWN
+							"format":         "TEXT_MARKDOWN", // TEXT_MARKDOWN
 							"mentions":       []string{"@john_doe"},
 						},
 						// Nested replies with recursive structure
@@ -229,7 +229,7 @@ func main() {
 								"content":           "Thanks! Glad you found it helpful.",
 								"created_at":        int64(1641003600),
 								"updated_at":        int64(1641003600),
-								"status":            int32(0), // COMMENT_VISIBLE
+								"status":            "COMMENT_VISIBLE", // COMMENT_VISIBLE
 								"likes":             int32(5),
 								"pinned":            false,
 								"parent_comment_id": int32(1),
@@ -239,7 +239,7 @@ func main() {
 								// oneof comment_type - using text_comment
 								"text_comment": map[string]interface{}{
 									"formatted_text": "Thanks! Glad you found it helpful.",
-									"format":         int32(0), // TEXT_PLAIN
+									"format":         "TEXT_PLAIN", // TEXT_PLAIN
 									"mentions":       []string{},
 								},
 								"replies": []map[string]interface{}{}, // Empty nested replies
@@ -252,20 +252,20 @@ func main() {
 				"id":         int32(102),
 				"title":      "Advanced Protobuf Patterns",
 				"author_id":  int32(1),
-				"status":     int32(1), // POST_PUBLISHED
+				"status":     "POST_PUBLISHED", // POST_PUBLISHED
 				"tags":       []string{"protobuf", "advanced", "patterns"},
 				"created_at": int64(1641081600),
 				"updated_at": int64(1641168000),
 				"view_count": int32(275),
 				"featured":   false,
-				"rating":     int32(1),          // RATING_TEEN
-				"flags":      []int32{int32(0)}, // FLAG_NONE
+				"rating":     "RATING_TEEN",         // RATING_TEEN
+				"flags":      []string{"FLAG_NONE"}, // FLAG_NONE
 
 				// oneof content - using multimedia_content
 				"multimedia_content": map[string]interface{}{
 					"video_url":   "https://example.com/video.mp4",
-					"duration":    int32(1800), // 30 minutes
-					"quality":     int32(1),    // QUALITY_HD
+					"duration":    int32(1800),  // 30 minutes
+					"quality":     "QUALITY_HD", // QUALITY_HD
 					"thumbnails":  []string{"thumb1.jpg", "thumb2.jpg"},
 					"captions":    []string{"English", "Spanish"},
 					"resolution":  "1920x1080",
@@ -282,7 +282,7 @@ func main() {
 						"value":        275.0,
 						"unit":         "count",
 						"last_updated": int64(1641168000),
-						"type":         int32(1), // METRIC_VIEWS
+						"type":         "METRIC_PERFORMANCE", // METRIC_PERFORMANCE
 						"history": []map[string]interface{}{
 							{"timestamp": int64(1641081600), "value": 100.0, "label": "launch"},
 							{"timestamp": int64(1641168000), "value": 275.0, "label": "week1"},
@@ -302,7 +302,7 @@ func main() {
 					"advanced": map[string]interface{}{
 						"name":          "Advanced Topics",
 						"description":   "Advanced technical deep-dives",
-						"type":          int32(1), // CATEGORY_SECONDARY
+						"type":          "CATEGORY_SECONDARY", // CATEGORY_SECONDARY
 						"post_count":    int32(8),
 						"subcategories": []string{"patterns", "optimization", "best-practices"},
 					},
@@ -361,8 +361,8 @@ func demonstrateWrapperTypes(proto protolite.Protolite) {
 		"id":        int32(100),
 		"name":      "Alice Smith",
 		"active":    true,
-		"status":    int32(1),
-		"user_type": int32(0),
+		"status":    "USER_ACTIVE",
+		"user_type": "USER_TYPE_REGULAR",
 
 		// Wrapper fields - some set, some omitted (will be nil)
 		"optional_nickname": "Alice_Codes",                            // StringValue - SET
@@ -396,8 +396,8 @@ func demonstrateWrapperTypes(proto protolite.Protolite) {
 		"id":        int32(101),
 		"name":      "Bob Johnson",
 		"active":    false,
-		"status":    int32(2), // INACTIVE
-		"user_type": int32(4), // GUEST
+		"status":    "USER_INACTIVE",   // INACTIVE
+		"user_type": "USER_TYPE_GUEST", // GUEST
 		"email":     "bob@example.com",
 		// ALL wrapper fields omitted - they will be nil
 	}
@@ -423,8 +423,8 @@ func demonstrateWrapperTypes(proto protolite.Protolite) {
 		"id":        int32(102),
 		"name":      "Charlie Brown",
 		"active":    true,
-		"status":    int32(1),
-		"user_type": int32(0),
+		"status":    "USER_ACTIVE",
+		"user_type": "USER_TYPE_REGULAR",
 
 		// Wrapper fields with explicit zero values (different from omitting!)
 		"optional_nickname": "",           // StringValue - EMPTY STRING (not nil!)
