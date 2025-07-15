@@ -389,6 +389,14 @@ func (r *Registry) convertProtoType(protoType string, allResolvedEntities map[st
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeFloat}, nil
 	case "double":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeDouble}, nil
+	case "fixed32":
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeFixed32}, nil
+	case "fixed64":
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeFixed64}, nil
+	case "sfixed32":
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeSfixed32}, nil
+	case "sfixed64":
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeSfixed64}, nil
 	// Google protobuf wrapper types
 	case "google.protobuf.DoubleValue":
 		return &schema.FieldType{Kind: schema.KindWrapper, WrapperType: schema.WrapperDoubleValue}, nil
