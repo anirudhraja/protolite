@@ -3,6 +3,7 @@ package wire
 import (
 	"fmt"
 	"sort"
+	"strconv"
 
 	"github.com/anirudhraja/protolite/schema"
 )
@@ -253,9 +254,30 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		return be.EncodeBytes(value.([]byte))
 	case schema.TypeInt32:
 		ve := NewVarintEncoder(encoder)
+		intValString, ok := value.(string)
+		if ok {
+			s, err := strconv.ParseInt(intValString, 10, 64)
+			if err!=nil {
+				return fmt.Errorf("error converting string to int32")
+			}
+			return ve.EncodeInt32(int32(s))
+		}
 		return ve.EncodeInt32(value.(int32))
 	case schema.TypeInt64:
 		ve := NewVarintEncoder(encoder)
+		intVal, ok := value.(int)
+		if ok {
+			return ve.EncodeInt64(int64(intVal))
+		}
+		intValString, ok := value.(string)
+		if ok {
+			s, err := strconv.ParseInt(intValString, 10, 64)
+			if err!=nil {
+				return fmt.Errorf("error converting string to int64")
+			}
+			return ve.EncodeInt64(s)
+		}
+
 		return ve.EncodeInt64(value.(int64))
 	case schema.TypeUint32:
 		ve := NewVarintEncoder(encoder)
@@ -423,8 +445,19 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		if err := ve.EncodeVarint(uint64(tag)); err != nil {
 			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
 		}
-		if err := ve.EncodeInt32(actualValue.(int32)); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
+		intValString, ok := actualValue.(string)
+		if ok {
+			s, err := strconv.ParseInt(intValString, 10, 64)
+			if err!=nil {
+				return fmt.Errorf("error converting string to int32")
+			}
+			if err := ve.EncodeInt32(int32(s)); err != nil {
+				return fmt.Errorf("failed to encode wrapper value: %v", err)
+			}
+		} else {
+			if err := ve.EncodeInt32(actualValue.(int32)); err != nil {
+				return fmt.Errorf("failed to encode wrapper value: %v", err)
+			}
 		}
 
 	case schema.WrapperUInt32Value:
