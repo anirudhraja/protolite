@@ -142,7 +142,7 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 	case schema.KindMessage:
 		return me.encodeMessageField(encoder, value, field.Type.MessageType)
 	case schema.KindEnum:
-		return me.encodeEnumField(encoder, value)
+		return me.encodeEnumField(encoder, value, field.Type)
 	case schema.KindWrapper:
 		return me.encodeWrapperField(encoder, value, field.Type.WrapperType)
 	default:
@@ -227,7 +227,7 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 				return fmt.Errorf("failed to encode repeated message element: %v", err)
 			}
 		case schema.KindEnum:
-			if err := me.encodeEnumField(encoder, element); err != nil {
+			if err := me.encodeEnumField(encoder, element, field.Type); err != nil {
 				return fmt.Errorf("failed to encode repeated enum element: %v", err)
 			}
 		case schema.KindWrapper:
@@ -246,32 +246,59 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface{}, primitiveType schema.PrimitiveType) error {
 	switch primitiveType {
 	case schema.TypeString:
-		be := NewBytesEncoder(encoder)
-		return be.EncodeString(value.(string))
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("expected string, got %T", value)
+		}
+		return NewBytesEncoder(encoder).EncodeString(v)
 	case schema.TypeBytes:
-		be := NewBytesEncoder(encoder)
-		return be.EncodeBytes(value.([]byte))
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("expected []byte, got %T", value)
+		}
+		return NewBytesEncoder(encoder).EncodeBytes(v)
 	case schema.TypeInt32:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeInt32(value.(int32))
+		v, ok := value.(int32)
+		if !ok {
+			return fmt.Errorf("expected int32, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeInt32(v)
 	case schema.TypeInt64:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeInt64(value.(int64))
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("expected int64, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeInt64(v)
 	case schema.TypeUint32:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeUint32(value.(uint32))
+		v, ok := value.(uint32)
+		if !ok {
+			return fmt.Errorf("expected uint32, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeUint32(v)
 	case schema.TypeUint64:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeUint64(value.(uint64))
+		v, ok := value.(uint64)
+		if !ok {
+			return fmt.Errorf("expected uint64, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeUint64(v)
 	case schema.TypeBool:
-		ve := NewVarintEncoder(encoder)
-		return ve.EncodeBool(value.(bool))
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("expected bool, got %T", value)
+		}
+		return NewVarintEncoder(encoder).EncodeBool(v)
 	case schema.TypeFloat:
-		fe := NewFixedEncoder(encoder)
-		return fe.EncodeFloat32(value.(float32))
+		v, ok := value.(float32)
+		if !ok {
+			return fmt.Errorf("expected float32, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeFloat32(v)
 	case schema.TypeDouble:
-		fe := NewFixedEncoder(encoder)
-		return fe.EncodeFloat64(value.(float64))
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("expected float64, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeFloat64(v)
 	default:
 		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
 	}
@@ -316,14 +343,23 @@ func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}
 }
 
 // encodeEnumField encodes an enum field
-func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}) error {
-	enumValue, ok := value.(int32)
+func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}, fieldType schema.FieldType) error {
+	enumValue, ok := value.(string)
 	if !ok {
-		return fmt.Errorf("enum value must be int32")
+		return fmt.Errorf("enum value must be string for %s field", fieldType.EnumType)
 	}
+	enum, err := me.encoder.registry.GetEnum(fieldType.EnumType)
+	if err != nil {
+		return fmt.Errorf("unknown enum %s received for enum , with value %v", fieldType.EnumType, value)
+	}
+	for _, en := range enum.Values {
+		if en.Name == enumValue {
+			ve := NewVarintEncoder(encoder)
+			return ve.EncodeEnum(en.Number)
+		}
+	}
+	return fmt.Errorf("cannot find field value %s in the enum %v", enumValue, enum.Values)
 
-	ve := NewVarintEncoder(encoder)
-	return ve.EncodeEnum(enumValue)
 }
 
 // encodeWrapperField encodes a wrapper field
@@ -345,12 +381,20 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		// If it's already a map with "value" key, extract the value
 		if mapVal, ok := v.(map[string]interface{}); ok {
 			if actualValue, exists := mapVal["value"]; exists {
-				return actualValue, nil
+				if isTypeMatch(actualValue, expectedType) {
+					return actualValue, nil
+				} else {
+					return nil, fmt.Errorf("expected %s, got %T", expectedType, actualValue)
+				}
 			}
 			return nil, fmt.Errorf("wrapper map must contain 'value' field")
 		}
 		// Otherwise, assume it's the primitive value directly
-		return v, nil
+		if isTypeMatch(v, expectedType) {
+			return v, nil
+		}
+		return nil, fmt.Errorf("expected %s, got %T", expectedType, v)
+
 	}
 
 	// Determine the wire type and encode the value based on wrapper type
@@ -617,4 +661,38 @@ func (d *Decoder) DecodeMessage(messageType string) (interface{}, error) {
 func (e *Encoder) EncodeMessage(data map[string]interface{}, msg *schema.Message) error {
 	me := NewMessageEncoder(e)
 	return me.EncodeMessage(data, msg)
+}
+
+func isTypeMatch(val interface{}, expectedType string) bool {
+	switch expectedType {
+	case "float64":
+		_, ok := val.(float64)
+		return ok
+	case "float32":
+		_, ok := val.(float32)
+		return ok
+	case "int64":
+		_, ok := val.(int64)
+		return ok
+	case "int32":
+		_, ok := val.(int32)
+		return ok
+	case "uint64":
+		_, ok := val.(uint64)
+		return ok
+	case "uint32":
+		_, ok := val.(uint32)
+		return ok
+	case "bool":
+		_, ok := val.(bool)
+		return ok
+	case "string":
+		_, ok := val.(string)
+		return ok
+	case "[]byte":
+		_, ok := val.([]byte)
+		return ok
+	default:
+		return false
+	}
 }

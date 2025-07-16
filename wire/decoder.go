@@ -128,7 +128,20 @@ func (d *Decoder) DecodeTypedField(fieldType *schema.FieldType, wireType WireTyp
 		return md.DecodeMessage(fieldType.MessageType)
 	case schema.KindEnum:
 		vd := NewVarintDecoder(d)
-		return vd.DecodeEnum()
+		enumIntVal, err := vd.DecodeEnum()
+		if err != nil {
+			return nil, err
+		}
+		enum, err := d.registry.GetEnum(fieldType.EnumType)
+		if err != nil {
+			return nil, err
+		}
+		for _, en := range enum.Values {
+			if en.Number == enumIntVal {
+				return en.Name, nil
+			}
+		}
+		return nil, fmt.Errorf("unknown enum field value %d received for enum field %v", enumIntVal, fieldType)
 	case schema.KindMap:
 		mapDecoder := NewMapDecoder(d)
 		key, value, err := mapDecoder.DecodeMapEntry(fieldType.MapKey, fieldType.MapValue)
