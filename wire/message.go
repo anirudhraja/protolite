@@ -299,6 +299,42 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 			return fmt.Errorf("expected float64, got %T", value)
 		}
 		return NewFixedEncoder(encoder).EncodeFloat64(v)
+	case schema.TypeFixed32:
+		v, ok := value.(uint32)
+		if !ok {
+			return fmt.Errorf("expected uint32, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeFixed32(v)
+	case schema.TypeFixed64:
+		v, ok := value.(uint64)
+		if !ok {
+			return fmt.Errorf("expected uint64, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeFixed64(v)
+	case schema.TypeSfixed32:
+		v, ok := value.(int32)
+		if !ok {
+			return fmt.Errorf("expected int32, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeSfixed32(v)
+	case schema.TypeSfixed64:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("expected int64, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeSfixed64(v)
+	case schema.TypeSint32:
+		v, ok := value.(int32)
+		if !ok {
+			return fmt.Errorf("expected int32, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeSfixed32(v)
+	case schema.TypeSint64:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("expected int64, got %T", value)
+		}
+		return NewFixedEncoder(encoder).EncodeSfixed64(v)
 	default:
 		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
 	}
