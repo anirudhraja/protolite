@@ -47,7 +47,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 		// Read field tag using varint decoder
 		tag, err := d.DecodeVarint()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to decode message %s: %v",msg.Name,err)
 		}
 
 		fieldNumber, wireType := ParseTag(Tag(tag))
@@ -73,7 +73,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 			// Unknown field - skip it
 			err := d.skipField(wireType)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to decode message %s: %v",msg.Name,err)
 			}
 			continue
 		}
