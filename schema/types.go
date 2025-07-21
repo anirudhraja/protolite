@@ -104,6 +104,28 @@ const (
 	TypeSint64   PrimitiveType = "sint64"
 )
 
+var packedEligible = map[PrimitiveType]struct{}{
+	TypeDouble:   {},
+	TypeFloat:    {},
+	TypeInt64:    {},
+	TypeUint64:   {},
+	TypeInt32:    {},
+	TypeFixed64:  {},
+	TypeFixed32:  {},
+	TypeBool:     {},
+	TypeUint32:   {},
+	TypeSfixed32: {},
+	TypeSfixed64: {},
+	TypeSint32:   {},
+	TypeSint64:   {},
+}
+
+// IsPackedType checks and returns if the Primitive type is packed for repeated label
+func IsPackedType(t PrimitiveType) bool {
+	_, ok := packedEligible[t]
+	return ok
+}
+
 // WrapperType represents protobuf wrapper types
 type WrapperType string
 
