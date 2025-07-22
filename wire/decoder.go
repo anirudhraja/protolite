@@ -47,7 +47,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 		// Read field tag using varint decoder
 		tag, err := d.DecodeVarint()
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode message %s: %v",msg.Name,err)
+			return nil, fmt.Errorf("failed to decode message %s: %v", msg.Name, err)
 		}
 
 		fieldNumber, wireType := ParseTag(Tag(tag))
@@ -73,7 +73,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 			// Unknown field - skip it
 			err := d.skipField(wireType)
 			if err != nil {
-				return nil, fmt.Errorf("failed to decode message %s: %v",msg.Name,err)
+				return nil, fmt.Errorf("failed to decode message %s: %v", msg.Name, err)
 			}
 			continue
 		}
@@ -123,7 +123,7 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 	fieldType := field.Type
 	switch fieldType.Kind {
 	case schema.KindPrimitive:
-		return d.decodePrimitive(fieldType.PrimitiveType, wireType)
+		return d.decodePrimitive(field, wireType)
 	case schema.KindMessage:
 		md := NewMessageDecoder(d)
 		return md.DecodeMessage(fieldType.MessageType)
@@ -163,7 +163,7 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 			}
 		}
 		// if its not repeated, return a single value
- 		if field.Label != schema.LabelRepeated {
+		if field.Label != schema.LabelRepeated {
 			return result[0], nil // we are guaranteed atleast one value in the slice if we reach here
 		}
 		// otherwise return the slice and the whole list gets appended
@@ -188,9 +188,49 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 }
 
 // decodePrimitive decodes a primitive type using the appropriate decoder
-func (d *Decoder) decodePrimitive(primitiveType schema.PrimitiveType, wireType WireType) (interface{}, error) {
-	switch wireType {
-	case WireVarint:
+func (d *Decoder) decodePrimitive(field *schema.Field, wireType WireType) (interface{}, error) {
+	primitiveType := field.Type.PrimitiveType
+	if wireType == WireBytes {
+		if schema.IsPackedType(primitiveType) {
+			// double check to ensure field is repeated
+			if field.Label != schema.LabelRepeated {
+				return nil, fmt.Errorf("wire type (2) for primitive scalars has to be repeated")
+			}
+			vd := NewVarintDecoder(d)
+			length, err := vd.DecodeVarint()
+			if err != nil {
+				return nil, err
+			}
+			res := make([]interface{}, 0)
+			for i := 0; i < int(length); i++ {
+				val, err := d.decodePrimitiveHelper(primitiveType)
+				if err != nil {
+					return nil, err
+				}
+				res = append(res, val)
+			}
+			return res, nil
+		} else {
+			// for string and bytes , its never packed even its repeated so decode and return
+			bd := NewBytesDecoder(d)
+			rawValue, err := bd.DecodeBytes()
+			if err != nil {
+				return nil, err
+			}
+			if primitiveType == schema.TypeString {
+				return string(rawValue), nil
+			}
+			return rawValue, nil
+		}
+	}
+	// reached here means its a single value encoded i.e its not packed
+	return d.decodePrimitiveHelper(primitiveType)
+}
+
+func (d *Decoder) decodePrimitiveHelper(primitiveType schema.PrimitiveType) (any, error) {
+	switch primitiveType {
+	case schema.TypeInt32, schema.TypeInt64, schema.TypeUint32, schema.TypeUint64,
+		schema.TypeSint32, schema.TypeSint64, schema.TypeBool:
 		vd := NewVarintDecoder(d)
 		rawValue, err := vd.DecodeVarint()
 		if err != nil {
@@ -212,34 +252,30 @@ func (d *Decoder) decodePrimitive(primitiveType schema.PrimitiveType, wireType W
 			return DecodeZigZag64(rawValue), nil
 		case schema.TypeBool:
 			return rawValue != 0, nil
-		default:
-			return rawValue, nil
 		}
-	case WireFixed32:
+
+	case schema.TypeFixed32, schema.TypeFixed64,
+		schema.TypeSfixed32, schema.TypeSfixed64,
+		schema.TypeFloat, schema.TypeDouble:
+
 		fd := NewFixedDecoder(d)
-		if primitiveType == schema.TypeFloat {
+
+		switch primitiveType {
+		case schema.TypeFixed32:
+			return fd.DecodeFixed32()
+		case schema.TypeFixed64:
+			return fd.DecodeFixed64()
+		case schema.TypeSfixed32:
+			return fd.DecodeSfixed32()
+		case schema.TypeSfixed64:
+			return fd.DecodeSfixed64()
+		case schema.TypeFloat:
 			return fd.DecodeFloat32()
-		}
-		return fd.DecodeFixed32()
-	case WireFixed64:
-		fd := NewFixedDecoder(d)
-		if primitiveType == schema.TypeDouble {
+		case schema.TypeDouble:
 			return fd.DecodeFloat64()
 		}
-		return fd.DecodeFixed64()
-	case WireBytes:
-		bd := NewBytesDecoder(d)
-		rawValue, err := bd.DecodeBytes()
-		if err != nil {
-			return nil, err
-		}
-		if primitiveType == schema.TypeString {
-			return string(rawValue), nil
-		}
-		return rawValue, nil
-	default:
-		return nil, fmt.Errorf("invalid wire type %d for primitive %s", wireType, primitiveType)
 	}
+	return nil, fmt.Errorf("unsupported primitive type: %v", primitiveType)
 }
 
 // decodeWrapper decodes a wrapper type
