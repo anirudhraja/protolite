@@ -49,7 +49,7 @@ func (r *Registry) getAllProtoInfo(protoFile string) ([]string, error) {
 				importPath := b.Location
 				importPath = strings.Trim(importPath, `"`)
 				// TODO handle this better
-				if strings.Contains(importPath, "google/protobuf") {
+				if strings.Contains(importPath, "google/protobuf/wrappers.proto") {
 					continue
 				}
 				fullImportPath, err := r.findIfProtoExists(importPath)
