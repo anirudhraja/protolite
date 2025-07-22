@@ -75,6 +75,10 @@ func (me *MessageEncoder) EncodeMessage(data map[string]interface{}, msg *schema
 	}
 	var entries []fieldEntry
 	for fieldName, fieldValue := range data {
+		// if there is no value , no need to iterate over the key
+		if fieldValue == nil {
+			continue
+		}
 		field := me.findFieldByName(msg, fieldName)
 		if field == nil {
 			continue // Skip unknown fields
