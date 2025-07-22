@@ -79,7 +79,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 		}
 
 		// Decode using appropriate decoder
-		value, err := d.DecodeTypedField(field, wireType)
+		value, isPackedType, err := d.DecodeTypedField(field, wireType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode field %s: %v", field.Name, err)
 		}
@@ -93,7 +93,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 			if entryMap, ok := value.(map[string]interface{}); ok {
 				mapCollector[field.Name][entryMap["key"]] = entryMap["value"]
 			}
-		} else if field.Label == schema.LabelRepeated {
+		} else if field.Label == schema.LabelRepeated && !isPackedType {
 			// Handle repeated fields
 			if repeatedCollector[field.Name] == nil {
 				repeatedCollector[field.Name] = make([]interface{}, 0)
@@ -119,14 +119,15 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 }
 
 // DecodeTypedField routes to the appropriate decoder based on field type
-func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (interface{}, error) {
+func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (interface{}, bool, error) {
 	fieldType := field.Type
 	switch fieldType.Kind {
 	case schema.KindPrimitive:
 		return d.decodePrimitive(field, wireType)
 	case schema.KindMessage:
 		md := NewMessageDecoder(d)
-		return md.DecodeMessage(fieldType.MessageType)
+		value, err := md.DecodeMessage(fieldType.MessageType)
+		return value, false, err
 	case schema.KindEnum:
 		len := uint64(1)
 		var err error
@@ -136,7 +137,7 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 			vd := NewVarintDecoder(d)
 			len, err = vd.DecodeVarint()
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 		}
 		// one by one read the bytes and find the relevant field name for it.
@@ -144,11 +145,11 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 			vd := NewVarintDecoder(d)
 			enumIntVal, err := vd.DecodeEnum()
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			enum, err := d.registry.GetEnum(fieldType.EnumType)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			var found bool
 			for _, en := range enum.Values {
@@ -159,72 +160,75 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 				}
 			}
 			if !found {
-				return nil, fmt.Errorf("unknown enum field value %d received for enum field %v", enumIntVal, fieldType)
+				return nil, false, fmt.Errorf("unknown enum field value %d received for enum field %v", enumIntVal, fieldType)
 			}
 		}
 		// if its not repeated, return a single value
 		if field.Label != schema.LabelRepeated {
-			return result[0], nil // we are guaranteed atleast one value in the slice if we reach here
+			return result[0], false, nil // we are guaranteed atleast one value in the slice if we reach here
 		}
 		// otherwise return the slice and the whole list gets appended
-		return result, nil
+		return result, true, nil
 
 	case schema.KindMap:
 		mapDecoder := NewMapDecoder(d)
 		key, value, err := mapDecoder.DecodeMapEntry(fieldType.MapKey, fieldType.MapValue)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		// Return as a map entry object
 		return map[string]interface{}{
 			"key":   key,
 			"value": value,
-		}, nil
+		}, false, nil
 	case schema.KindWrapper:
-		return d.decodeWrapper(fieldType.WrapperType, wireType)
+		value, err := d.decodeWrapper(fieldType.WrapperType, wireType)
+		return value, false, err
 	default:
-		return d.decodeRawValue(wireType)
+		value, err := d.decodeRawValue(wireType)
+		return value, false, err
 	}
 }
 
 // decodePrimitive decodes a primitive type using the appropriate decoder
-func (d *Decoder) decodePrimitive(field *schema.Field, wireType WireType) (interface{}, error) {
+func (d *Decoder) decodePrimitive(field *schema.Field, wireType WireType) (interface{}, bool, error) {
 	primitiveType := field.Type.PrimitiveType
 	if wireType == WireBytes {
 		if schema.IsPackedType(primitiveType) {
 			// double check to ensure field is repeated
 			if field.Label != schema.LabelRepeated {
-				return nil, fmt.Errorf("wire type (2) for primitive scalars has to be repeated")
+				return nil, false, fmt.Errorf("wire type (2) for primitive scalars has to be repeated")
 			}
 			vd := NewVarintDecoder(d)
 			length, err := vd.DecodeVarint()
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			res := make([]interface{}, 0)
 			for i := 0; i < int(length); i++ {
 				val, err := d.decodePrimitiveHelper(primitiveType)
 				if err != nil {
-					return nil, err
+					return nil, false, err
 				}
 				res = append(res, val)
 			}
-			return res, nil
+			return res, true, nil
 		} else {
 			// for string and bytes , its never packed even its repeated so decode and return
 			bd := NewBytesDecoder(d)
 			rawValue, err := bd.DecodeBytes()
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if primitiveType == schema.TypeString {
-				return string(rawValue), nil
+				return string(rawValue), false, nil
 			}
-			return rawValue, nil
+			return rawValue, false, nil
 		}
 	}
 	// reached here means its a single value encoded i.e its not packed
-	return d.decodePrimitiveHelper(primitiveType)
+	value, err := d.decodePrimitiveHelper(primitiveType)
+	return value, false, err
 }
 
 func (d *Decoder) decodePrimitiveHelper(primitiveType schema.PrimitiveType) (any, error) {
