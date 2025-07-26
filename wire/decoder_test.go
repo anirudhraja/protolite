@@ -865,3 +865,118 @@ func TestDecoder_ComplexMixed(t *testing.T) {
 		}
 	}
 }
+
+func TestDecoder_JSONNames(t *testing.T) {
+	// Define a complex message that combines all types
+	complexMessage := &schema.Message{
+		Name: "ComplexMessage",
+		Fields: []*schema.Field{
+			{
+				Name:   "ID",
+				Number: 1,
+				Type: schema.FieldType{
+					Kind:          schema.KindPrimitive,
+					PrimitiveType: schema.TypeInt32,
+				},
+				Label:    schema.LabelOptional,
+				JsonName: "id",
+			},
+			{
+				Name:   "NAME",
+				Number: 2,
+				Type: schema.FieldType{
+					Kind:          schema.KindPrimitive,
+					PrimitiveType: schema.TypeString,
+				},
+				JsonName: "name",
+			},
+			{
+				Name:   "METADATA",
+				Number: 4,
+				Type: schema.FieldType{
+					Kind:        schema.KindMessage,
+					MessageType: "Metadata",
+				},
+				JsonName: "metadata",
+			},
+		},
+	}
+
+	metadataMessage := &schema.Message{
+		Name: "Metadata",
+		Fields: []*schema.Field{
+			{
+				Name:   "CREATED_AT",
+				Number: 1,
+				Type: schema.FieldType{
+					Kind:          schema.KindPrimitive,
+					PrimitiveType: schema.TypeString,
+				},
+				JsonName: "created_at",
+			},
+			{
+				Name:   "VERSION",
+				Number: 2,
+				Type: schema.FieldType{
+					Kind:          schema.KindPrimitive,
+					PrimitiveType: schema.TypeInt32,
+				},
+				JsonName: "version",
+			},
+		},
+	}
+
+	// Create nested metadata
+	metadata := map[string]interface{}{
+		"created_at": "2023-01-01T00:00:00Z",
+		"version":    int32(1),
+	}
+	metadataBytes, err := EncodeMessage(metadata, metadataMessage, nil)
+	if err != nil {
+		t.Fatalf("Failed to encode metadata: %v", err)
+	}
+
+	// Create complex test data
+	testData := map[string]interface{}{
+		"id":       int32(12345),
+		"name":     "Complex Test",
+		"metadata": metadataBytes,
+	}
+
+	// Encode
+	encodedData, err := EncodeMessage(testData, complexMessage, nil)
+	if err != nil {
+		t.Fatalf("Failed to encode complex message: %v", err)
+	}
+
+	// Decode
+	decodedData, err := DecodeMessage(encodedData, complexMessage, nil)
+	if err != nil {
+		t.Fatalf("Failed to decode complex message: %v", err)
+	}
+
+	// Verify primitive fields
+	if decodedData["id"] != int32(12345) {
+		t.Errorf("Expected id=12345, got %v", decodedData["id"])
+	}
+	if decodedData["name"] != "Complex Test" {
+		t.Errorf("Expected name='Complex Test', got %v", decodedData["name"])
+	}
+
+	// Verify nested message
+	metadataBytes2, ok := decodedData["metadata"].([]byte)
+	if !ok {
+		t.Errorf("Expected metadata to be []byte, got %T", decodedData["metadata"])
+	} else {
+		metadataDecoded, err := DecodeMessage(metadataBytes2, metadataMessage, nil)
+		if err != nil {
+			t.Fatalf("Failed to decode metadata: %v", err)
+		}
+		if metadataDecoded["created_at"] != "2023-01-01T00:00:00Z" {
+			t.Errorf("Expected created_at='2023-01-01T00:00:00Z', got %v", metadataDecoded["created_at"])
+		}
+		if metadataDecoded["version"] != int32(1) {
+			t.Errorf("Expected version=1, got %v", metadataDecoded["version"])
+		}
+	}
+}

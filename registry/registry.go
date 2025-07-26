@@ -102,7 +102,7 @@ func (r *Registry) resolveProtoFile(protoPath string) ([]string, error) {
 		case *protoparserparser.Package:
 			packageName = b.Name
 		}
-		if packageName != ""{
+		if packageName != "" {
 			break
 		}
 	}
@@ -247,16 +247,17 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 				if err != nil {
 					return nil, err
 				}
-				fieldType,err:= r.convertProtoType(field.Type, allResolvedEntities, prefix)
-				if err!=nil{
-					return nil,err
+				fieldType, err := r.convertProtoType(field.Type, allResolvedEntities, prefix)
+				if err != nil {
+					return nil, err
 				}
 				fieldLabel := schema.LabelOptional
 				f := &schema.Field{
-					Name:   field.FieldName,
-					Number: int32(fieldNumber),
-					Label:  fieldLabel,
-					Type:   *fieldType,
+					Name:     field.FieldName,
+					Number:   int32(fieldNumber),
+					Label:    fieldLabel,
+					Type:     *fieldType,
+					JsonName: findJSONName(field.FieldOptions),
 				}
 				oneOfFields = append(oneOfFields, f)
 			}
@@ -285,15 +286,16 @@ func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities
 	} else if field.IsRequired {
 		fieldLabel = schema.LabelRequired
 	}
-	fieldType,err := r.convertProtoType(field.Type, resolvedEntities, prefix)
-	if err!=nil {
-		return nil,err
+	fieldType, err := r.convertProtoType(field.Type, resolvedEntities, prefix)
+	if err != nil {
+		return nil, err
 	}
 	f := &schema.Field{
-		Name:   field.FieldName,
-		Number: int32(fieldNumber),
-		Label:  fieldLabel,
-		Type:   *fieldType,
+		Name:     field.FieldName,
+		Number:   int32(fieldNumber),
+		Label:    fieldLabel,
+		Type:     *fieldType,
+		JsonName: findJSONName(field.FieldOptions),
 	}
 	return f, nil
 }
@@ -320,6 +322,7 @@ func (r *Registry) processMapField(field *protoparserparser.MapField, resolvedEn
 			MapKey:   mapKeyType,
 			MapValue: mapValueType,
 		},
+		JsonName: findJSONName(field.FieldOptions),
 	}
 	return f, nil
 }

@@ -11,6 +11,10 @@ import (
 	protoparserparser "github.com/yoheimuta/go-protoparser/v4/parser"
 )
 
+const (
+	optionJSONNameKey = "json_name"
+)
+
 // getAllProtoInfo uses DFS to fetch all the files from all directories passed and stores relevant proto files
 func (r *Registry) getAllProtoInfo(protoFile string) ([]string, error) {
 	visited := make(map[string]struct{}) // to make sure we don't end up in a loop
@@ -78,7 +82,7 @@ func (r *Registry) getAllProtoInfo(protoFile string) ([]string, error) {
 
 func (r *Registry) findIfProtoExists(protoPath string) (string, error) {
 	var (
-		fullPath string
+		fullPath      string
 		fullProtoPath string
 		err           error
 	)
@@ -92,10 +96,10 @@ func (r *Registry) findIfProtoExists(protoPath string) (string, error) {
 			break
 		}
 	}
-	if fullProtoPath == ""{
+	if fullProtoPath == "" {
 		return "", fmt.Errorf("path does not exist: %s %w", fullPath, err)
 	}
-	if !strings.HasSuffix(fullProtoPath,".proto") {
+	if !strings.HasSuffix(fullProtoPath, ".proto") {
 		return "", fmt.Errorf("is not a .proto file %s %w", fullPath, err)
 	}
 	return fullProtoPath, nil
@@ -150,4 +154,13 @@ func getFullyQualifiedType(typeName string, allResolvedEntities map[string]struc
 		return typeName, nil
 	}
 	return "", fmt.Errorf("unbale to resolve full qualified prefixed with (.) type name: %s", typeName)
+}
+
+func findJSONName(options []*protoparserparser.FieldOption) string {
+	for _, opt := range options {
+		if strings.Trim(opt.OptionName, `"`) == optionJSONNameKey {
+			return strings.Trim(opt.Constant, `"`)
+		}
+	}
+	return ""
 }
