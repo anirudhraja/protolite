@@ -60,24 +60,26 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 				break
 			}
 		}
-		for _, f := range msg.OneofGroups {
-			for _, oneOfField := range f.Fields {
-				if oneOfField.Number == int32(fieldNumber) {
-					field = oneOfField
-					break
+		// attempt to find it in oneof fields
+		if field == nil {
+			for _, f := range msg.OneofGroups {
+				for _, oneOfField := range f.Fields {
+					if oneOfField.Number == int32(fieldNumber) {
+						field = oneOfField
+						break
+					}
 				}
 			}
 		}
-
+		// Unknown field - skip it
 		if field == nil {
-			// Unknown field - skip it
 			err := d.skipField(wireType)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode message %s: %v", msg.Name, err)
 			}
 			continue
 		}
-
+		fieldName := d.getFieldName(field)
 		// Decode using appropriate decoder
 		value, err := d.DecodeTypedField(field, wireType)
 		if err != nil {
@@ -87,21 +89,21 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 		// Handle different field types
 		if field.Type.Kind == schema.KindMap {
 			// Handle maps specially
-			if mapCollector[field.Name] == nil {
-				mapCollector[field.Name] = make(map[interface{}]interface{})
+			if mapCollector[fieldName] == nil {
+				mapCollector[fieldName] = make(map[interface{}]interface{})
 			}
 			if entryMap, ok := value.(map[string]interface{}); ok {
-				mapCollector[field.Name][entryMap["key"]] = entryMap["value"]
+				mapCollector[fieldName][entryMap["key"]] = entryMap["value"]
 			}
 		} else if field.Label == schema.LabelRepeated {
 			// Handle repeated fields
-			if repeatedCollector[field.Name] == nil {
-				repeatedCollector[field.Name] = make([]interface{}, 0)
+			if repeatedCollector[fieldName] == nil {
+				repeatedCollector[fieldName] = make([]interface{}, 0)
 			}
-			repeatedCollector[field.Name] = append(repeatedCollector[field.Name], value)
+			repeatedCollector[fieldName] = append(repeatedCollector[fieldName], value)
 		} else {
 			// Handle regular fields
-			result[field.Name] = value
+			result[fieldName] = value
 		}
 	}
 
@@ -492,4 +494,11 @@ func (d *Decoder) DecodeField() (*Value, error) {
 		WireType:    wireType,
 		Data:        data,
 	}, nil
+}
+
+func (d *Decoder) getFieldName(field *schema.Field) string {
+	if field.JsonName != "" {
+		return field.JsonName
+	}
+	return field.Name
 }

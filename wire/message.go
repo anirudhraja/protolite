@@ -850,13 +850,13 @@ func (me *MessageEncoder) getWireType(fieldType *schema.FieldType) WireType {
 // findFieldByName finds a field by name in a message
 func (me *MessageEncoder) findFieldByName(msg *schema.Message, fieldName string) *schema.Field {
 	for _, field := range msg.Fields {
-		if field.Name == fieldName {
+		if field.Name == fieldName || field.JsonName == fieldName {
 			return field
 		}
 	}
 	for _, oneOf := range msg.OneofGroups {
 		for _, field := range oneOf.Fields {
-			if field.Name == fieldName {
+			if field.Name == fieldName || field.JsonName == fieldName {
 				return field
 			}
 		}
