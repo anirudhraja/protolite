@@ -362,6 +362,7 @@ func (r *Registry) processEnum(enum *protoparserparser.Enum) (*schema.Enum, erro
 			enumValues = append(enumValues, &schema.EnumValue{
 				Name:   b.Ident,
 				Number: int32(num),
+				JsonName: findJSONNameForEnumValue(b.EnumValueOptions),
 			})
 		}
 	}

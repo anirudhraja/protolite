@@ -547,6 +547,9 @@ func getDefaultValue(pt schema.PrimitiveType) interface{} {
 func (d *Decoder) findEnumValue(enum *schema.Enum, enumIntVal int32) (string, error) {
 	for _, en := range enum.Values {
 		if en.Number == enumIntVal {
+			if en.JsonName != "" {
+				return en.JsonName, nil
+			}
 			return en.Name, nil
 		}
 	}
