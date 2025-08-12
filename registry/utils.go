@@ -164,3 +164,12 @@ func findJSONName(options []*protoparserparser.FieldOption) string {
 	}
 	return ""
 }
+
+func findJSONNameForEnumValue(options []*protoparserparser.EnumValueOption) string {
+	for _, opt := range options {
+		if strings.Trim(opt.OptionName, `"`) == optionJSONNameKey {
+			return strings.Trim(opt.Constant, `"`)
+		}
+	}
+	return ""
+}

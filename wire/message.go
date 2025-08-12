@@ -501,7 +501,7 @@ func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}, f
 		return fmt.Errorf("unknown enum %s received for enum , with value %v", fieldType.EnumType, value)
 	}
 	for _, en := range enum.Values {
-		if en.Name == enumValue {
+		if en.Name == enumValue || en.JsonName == enumValue {
 			ve := NewVarintEncoder(encoder)
 			return ve.EncodeEnum(en.Number)
 		}

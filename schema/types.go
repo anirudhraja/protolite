@@ -150,8 +150,9 @@ type Enum struct {
 
 // EnumValue represents an enum value
 type EnumValue struct {
-	Name   string `json:"name"`   // "ACTIVE"
-	Number int32  `json:"number"` // 1
+	Name     string `json:"name"`      // "ACTIVE"
+	Number   int32  `json:"number"`    // 1
+	JsonName string `json:"json_name"` // JSON field name
 }
 
 // Service represents a service definition
