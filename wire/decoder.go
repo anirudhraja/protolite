@@ -32,13 +32,13 @@ func NewDecoderWithRegistry(data []byte, registry *registry.Registry) *Decoder {
 }
 
 // DecodeMessage decodes protobuf bytes using schema - main entry point
-func DecodeMessage(data []byte, msg *schema.Message, registry *registry.Registry) (map[string]interface{}, error) {
+func DecodeMessage(data []byte, msg *schema.Message, registry *registry.Registry) (interface{}, error) {
 	decoder := NewDecoderWithRegistry(data, registry)
 	return decoder.DecodeWithSchema(msg)
 }
 
 // Main decoding methods that orchestrate the individual decoders
-func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{}, error) {
+func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 	result := make(map[string]interface{})
 	mapCollector := make(map[string]map[interface{}]interface{})
 	repeatedCollector := make(map[string][]interface{})
@@ -79,7 +79,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 			}
 			continue
 		}
-		fieldName := d.getFieldName(field)
+		fieldName := getFieldName(field)
 		// Decode using appropriate decoder
 		value, isPackedType, err := d.DecodeTypedField(field, wireType)
 		if err != nil {
@@ -118,7 +118,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 	}
 	// if its primitive type , add all default values to the message
 	for _, field := range msg.Fields {
-		fieldName:=d.getFieldName(field)
+		fieldName:=getFieldName(field)
 		// add default values only when its not present in result
 		if _, ok := result[fieldName]; !ok {
 			if field.Type.Kind == schema.KindPrimitive { // add default for primitive types except bytes
@@ -135,6 +135,9 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (map[string]interface{},
 				result[fieldName] = enumDefaultStringVal
 			}
 		}
+	}
+	if msg.IsListWrapper {
+		return result[getFieldName(msg.Fields[0])], nil
 	}
 	return result, nil
 }
@@ -514,7 +517,7 @@ func (d *Decoder) DecodeField() (*Value, error) {
 	}, nil
 }
 
-func (d *Decoder) getFieldName(field *schema.Field) string {
+func getFieldName(field *schema.Field) string {
 	if field.JsonName != "" {
 		return field.JsonName
 	}

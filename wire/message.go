@@ -58,9 +58,31 @@ func (md *MessageDecoder) DecodeMessage(messageType string) (interface{}, error)
 }
 
 // ENCODER METHODS
+func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) error {
+	var (
+		messageData map[string]interface{}
+		ok          bool
+	)
+	if msg.IsListWrapper {
+		messageListData, ok := data.([]interface{})
+		if !ok {
+			return fmt.Errorf("message value must be []interface{}, got %T", data)
+		}
+		messageData = map[string]interface{}{
+			getFieldName(msg.Fields[0]): messageListData,
+		}
+	} else {
+		// If it's a map, we need to encode it as a message
+		messageData, ok = data.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("message value must be map[string]interface{} or []byte or []interface{}, got %T", data)
+		}
+	}
+	return me.encodeMessage(messageData, msg)
+}
 
 // EncodeMessage encodes a message with the given data
-func (me *MessageEncoder) EncodeMessage(data map[string]interface{}, msg *schema.Message) error {
+func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema.Message) error {
 	// Create a temporary encoder for the message content
 	messageEncoder := NewEncoder()
 	messageEncoder.registry = me.encoder.registry
@@ -455,12 +477,6 @@ func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}
 		return be.EncodeBytes(messageBytes)
 	}
 
-	// If it's a map, we need to encode it as a message
-	messageData, ok := value.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("message value must be map[string]interface{} or []byte, got %T", value)
-	}
-
 	// Look up the message schema
 	if me.encoder.registry == nil {
 		return fmt.Errorf("registry is required to encode message fields")
@@ -476,7 +492,7 @@ func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}
 	nestedEncoder.registry = me.encoder.registry
 
 	nestedMessageEncoder := NewMessageEncoder(nestedEncoder)
-	if err := nestedMessageEncoder.EncodeMessage(messageData, messageSchema); err != nil {
+	if err := nestedMessageEncoder.EncodeMessage(value, messageSchema); err != nil {
 		return fmt.Errorf("failed to encode nested message: %v", err)
 	}
 

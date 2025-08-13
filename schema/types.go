@@ -25,13 +25,14 @@ type Import struct {
 
 // Message represents a protobuf message definition
 type Message struct {
-	Name        string     `json:"name"`         // "User"
-	Fields      []*Field   `json:"fields"`       // message fields
-	NestedTypes []*Message `json:"nested_types"` // nested messages
-	NestedEnums []*Enum    `json:"nested_enums"` // nested enums
-	Extensions  []*Field   `json:"extensions"`   // extension fields
-	OneofGroups []*Oneof   `json:"oneof_groups"` // oneof groups
-	MapEntry    bool       `json:"map_entry"`    // is this a map entry?
+	Name          string     `json:"name"`         	   // "User"
+	Fields        []*Field   `json:"fields"`       	   // message fields
+	NestedTypes   []*Message `json:"nested_types"` 	   // nested messages
+	NestedEnums   []*Enum    `json:"nested_enums"`     // nested enums
+	Extensions    []*Field   `json:"extensions"`   	   // extension fields
+	OneofGroups   []*Oneof   `json:"oneof_groups"` 	   // oneof groups
+	MapEntry      bool       `json:"map_entry"`    	   // is this a map entry?
+	IsListWrapper bool     	 `json:"is_list_wrapper"`  // is this a list wrapper?
 }
 
 // Field represents a message field
