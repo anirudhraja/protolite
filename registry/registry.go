@@ -228,6 +228,10 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 				return nil, err
 			}
 			nestedTypes = append(nestedTypes, msg)
+		case *protoparserparser.Option:
+			if findIsListWrapper(b) {
+				msg.IsListWrapper = true
+			}
 		case *protoparserparser.Field:
 			field, err := r.processField(b, allResolvedEntities, prefix)
 			if err != nil {
@@ -265,6 +269,12 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 				Name:   b.OneofName,
 				Fields: oneOfFields,
 			})
+		}
+	}
+	// validation for list wrapper
+	if msg.IsListWrapper {
+		if len(fields) != 1 && fields[0].Label != schema.LabelRepeated {
+			return nil, fmt.Errorf("ListWrapper message should contain exactly one field of repeated type")
 		}
 	}
 	msg.NestedTypes = nestedTypes
@@ -377,7 +387,11 @@ func (r *Registry) convertProtoType(protoType string, allResolvedEntities map[st
 	switch protoType {
 	case "int32":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt32}, nil
+	case "sint32":
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt32}, nil
 	case "int64":
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt64}, nil
+	case "sint64":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt64}, nil
 	case "uint32":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint32}, nil

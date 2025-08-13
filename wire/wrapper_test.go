@@ -117,10 +117,14 @@ func TestWrapperTypes_Encoding_Decoding(t *testing.T) {
 			}
 
 			// Decode the message
-			decodedData, err := DecodeMessage(encodedData, message, nil)
+			decodedDataI, err := DecodeMessage(encodedData, message, nil)
 			if err != nil {
 				t.Fatalf("Failed to decode message: %v", err)
 			}
+			decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+	}
 
 			// Verify the result
 			if tt.expectNil {
@@ -182,11 +186,14 @@ func TestWrapperTypes_RepeatedFields(t *testing.T) {
 	}
 
 	// Decode the message
-	decodedData, err := DecodeMessage(encodedData, message, nil)
+	decodedDataI, err := DecodeMessage(encodedData, message, nil)
 	if err != nil {
 		t.Fatalf("Failed to decode message: %v", err)
 	}
-
+decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+	}
 	// Verify repeated strings
 	stringField, exists := decodedData["repeated_strings"]
 	if !exists {
@@ -211,7 +218,6 @@ func TestWrapperTypes_RepeatedFields(t *testing.T) {
 			t.Errorf("Expected string %s at index %d, got %v", expected, i, stringSlice[i])
 		}
 	}
-
 	// Verify repeated ints
 	intField, exists := decodedData["repeated_ints"]
 	if !exists {
@@ -264,11 +270,14 @@ func TestWrapperTypes_EdgeCases(t *testing.T) {
 			t.Fatalf("Failed to encode: %v", err)
 		}
 
-		decodedData, err := DecodeMessage(encodedData, message, nil)
+		decodedDataI, err := DecodeMessage(encodedData, message, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode: %v", err)
 		}
-
+decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+	}
 		if field, exists := decodedData["empty_string"]; !exists {
 			t.Error("Expected empty_string field to exist")
 		} else if str, ok := field.(string); !ok || str != "" {
@@ -319,11 +328,14 @@ func TestWrapperTypes_EdgeCases(t *testing.T) {
 			t.Fatalf("Failed to encode: %v", err)
 		}
 
-		decodedData, err := DecodeMessage(encodedData, message, nil)
+		decodedDataI, err := DecodeMessage(encodedData, message, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode: %v", err)
 		}
-
+decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+	}
 		// Verify all zero values are correctly preserved
 		if field, exists := decodedData["zero_int"]; !exists {
 			t.Error("Expected zero_int field to exist")
