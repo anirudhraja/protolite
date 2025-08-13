@@ -36,8 +36,8 @@ func NewDecoderWithRegistry(data []byte, registry *registry.Registry) *Decoder {
 func DecodeMessage(data []byte, msg *schema.Message, registry *registry.Registry) (map[string]interface{}, error) {
 	decoder := NewDecoderWithRegistry(data, registry)
 	val, err := decoder.DecodeWithSchema(msg)
-	if err != nil {
-		return nil, err
+	if registry == nil || err != nil {
+		return val, err
 	}
 	for _, field := range msg.Fields {
 		val[field.Name] = transform(registry, val[field.Name], field)
@@ -46,20 +46,28 @@ func DecodeMessage(data []byte, msg *schema.Message, registry *registry.Registry
 }
 
 func transform(registry *registry.Registry, val interface{}, field *schema.Field) interface{} {
+	if val == nil {
+		return nil
+	}
 	switch field.Type.Kind {
 	case schema.KindMessage:
-		if strings.HasSuffix(field.Type.MessageType, "ListWrapper") {
-			msg, _ := registry.GetMessage(field.Type.MessageType)
-			if field.Label == schema.LabelRepeated {
-				valList := val.([]interface{})
-				outList := make([]interface{}, 0, len(valList))
-				for i := range valList {
-					outList = append(outList, transform(registry, valList[i].(map[string]interface{})["items"], msg.Fields[0]))
-				}
-				return outList
-			} else {
-				return transform(registry, val.(map[string]interface{})["items"], msg.Fields[0])
+		msg, _ := registry.GetMessage(field.Type.MessageType)
+		if field.Label == schema.LabelRepeated {
+			valList, _ := val.([]interface{})
+			for i := range valList {
+				singleField := *field
+				singleField.Label = schema.LabelOptional
+				valList[i] = transform(registry, valList[i], &singleField)
 			}
+			return valList
+		} else if strings.HasSuffix(field.Type.MessageType, "ListWrapper") {
+			return transform(registry, val.(map[string]interface{})["items"], msg.Fields[0])
+		} else {
+			valMap, _ := val.(map[string]interface{})
+			for _, field := range msg.Fields {
+				valMap[field.Name] = transform(registry, valMap[field.Name], field)
+			}
+			return valMap
 		}
 	}
 	return val
