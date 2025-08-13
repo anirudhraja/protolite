@@ -1,6 +1,8 @@
 package protolite
 
 import (
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -475,7 +477,7 @@ func TestProtolite_Integration(t *testing.T) {
 }
 
 func TestProtolite_UnmarshalWithSchema(t *testing.T) {
-	proto := NewProtolite([]string{"","sampleapp/testdata"})
+	proto := NewProtolite([]string{"", "sampleapp/testdata"})
 
 	t.Run("unmarshal_with_schema", func(t *testing.T) {
 		if err := proto.LoadSchemaFromFile("sampleapp/testdata/post.proto"); err != nil {
@@ -726,4 +728,34 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		t.Log("✅ User with 2 Posts marshaled and unmarshaled correctly")
 		t.Log("✅ All field values verified")
 	})
+}
+
+func TestProtolite_ListOfList(t *testing.T) {
+	proto := NewProtolite([]string{"", "sampleapp/testdata"})
+	if err := proto.LoadSchemaFromFile("list.proto"); err != nil {
+		t.Fatalf("Failed to load post.proto: %v", err)
+	}
+	data := map[string]interface{}{
+		"listOfList": []interface{}{
+			[]interface{}{int32(1), int32(4), int32(6), int32(4), int32(1)},
+			[]interface{}{int32(1), int32(3), int32(3), int32(1)},
+			[]interface{}{int32(1), int32(2), int32(1)},
+			[]interface{}{int32(1), int32(1)},
+			[]interface{}{int32(1)},
+		},
+	}
+	b, err := proto.MarshalWithSchema(data, "ListOfListTester")
+	if err != nil {
+		t.Error("error in marshal", err)
+	}
+	got, err := proto.UnmarshalWithSchema(b, "ListOfListTester")
+	if err != nil {
+		t.Error("error in unmarshal", err)
+	}
+	if !reflect.DeepEqual(data, got) {
+		t.Error("test failed")
+		wantJSON, _ := json.MarshalIndent(data, "", "  ")
+		gotJSON, _ := json.MarshalIndent(got, "", "  ")
+		fmt.Printf("want\n%s\n\ngot\n%s\n", wantJSON, gotJSON)
+	}
 }

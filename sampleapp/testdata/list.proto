@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package blog;
+
+message ListOfListTester {
+  message FirstListWrapper {
+    message SecondListWrapper {
+      repeated int32 items = 1;
+    }
+    repeated SecondListWrapper items = 1;
+  }
+  FirstListWrapper listOfList = 1;
+}

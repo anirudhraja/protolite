@@ -2,6 +2,7 @@ package wire
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/anirudhraja/protolite/registry"
 	"github.com/anirudhraja/protolite/schema"
@@ -34,7 +35,34 @@ func NewDecoderWithRegistry(data []byte, registry *registry.Registry) *Decoder {
 // DecodeMessage decodes protobuf bytes using schema - main entry point
 func DecodeMessage(data []byte, msg *schema.Message, registry *registry.Registry) (map[string]interface{}, error) {
 	decoder := NewDecoderWithRegistry(data, registry)
-	return decoder.DecodeWithSchema(msg)
+	val, err := decoder.DecodeWithSchema(msg)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range msg.Fields {
+		val[field.Name] = transform(registry, val[field.Name], field)
+	}
+	return val, nil
+}
+
+func transform(registry *registry.Registry, val interface{}, field *schema.Field) interface{} {
+	switch field.Type.Kind {
+	case schema.KindMessage:
+		if strings.HasSuffix(field.Type.MessageType, "ListWrapper") {
+			msg, _ := registry.GetMessage(field.Type.MessageType)
+			if field.Label == schema.LabelRepeated {
+				valList := val.([]interface{})
+				outList := make([]interface{}, 0, len(valList))
+				for i := range valList {
+					outList = append(outList, transform(registry, valList[i].(map[string]interface{})["items"], msg.Fields[0]))
+				}
+				return outList
+			} else {
+				return transform(registry, val.(map[string]interface{})["items"], msg.Fields[0])
+			}
+		}
+	}
+	return val
 }
 
 // Main decoding methods that orchestrate the individual decoders

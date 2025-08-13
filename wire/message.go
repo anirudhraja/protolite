@@ -348,6 +348,28 @@ func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}
 		return be.EncodeBytes(messageBytes)
 	}
 
+	if listVal, ok := value.([]interface{}); ok {
+		messageSchema, err := me.encoder.registry.GetMessage(messageTypeName)
+		if err != nil {
+			return fmt.Errorf("failed to get message schema for %s: %v", messageTypeName, err)
+		}
+		// Create a temporary encoder for the nested message
+		nestedEncoder := NewEncoder()
+		nestedEncoder.registry = me.encoder.registry
+
+		wrappedVal := make(map[string]interface{})
+		wrappedVal["items"] = listVal
+
+		nestedMessageEncoder := NewMessageEncoder(nestedEncoder)
+		if err := nestedMessageEncoder.EncodeMessage(wrappedVal, messageSchema); err != nil {
+			return fmt.Errorf("failed to encode nested message: %v", err)
+		}
+
+		// Encode the nested message bytes
+		be := NewBytesEncoder(encoder)
+		return be.EncodeBytes(nestedEncoder.Bytes())
+	}
+
 	// If it's a map, we need to encode it as a message
 	messageData, ok := value.(map[string]interface{})
 	if !ok {
