@@ -113,11 +113,14 @@ func TestDecoder_AllTypes(t *testing.T) {
 	}
 
 	// Decode the message
-	decodedData, err := DecodeMessage(encodedData, mainMessage, nil)
+	decodedDataI, err := DecodeMessage(encodedData, mainMessage, nil)
 	if err != nil {
 		t.Fatalf("Failed to decode message: %v", err)
 	}
-
+	decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+	}
 	// Verify the results
 	tests := []struct {
 		field    string
@@ -207,11 +210,14 @@ func TestDecoder_PrimitiveTypes(t *testing.T) {
 			}
 
 			// Decode
-			decodedData, err := DecodeMessage(encoder.Bytes(), msg, nil)
+			decodedDataI, err := DecodeMessage(encoder.Bytes(), msg, nil)
 			if err != nil {
 				t.Fatalf("Failed to decode: %v", err)
 			}
-
+			decodedData, ok := decodedDataI.(map[string]interface{})
+			if !ok {
+				t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+			}
 			// Verify
 			actual := decodedData["test_field"]
 			if !reflect.DeepEqual(actual, test.testValue) {
@@ -238,9 +244,13 @@ func TestDecoder_EdgeCases(t *testing.T) {
 		}
 
 		// Decode
-		decodedData, err := DecodeMessage(encodedData, msg, nil)
+		decodedDataI, err := DecodeMessage(encodedData, msg, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode empty message: %v", err)
+		}
+		decodedData, ok := decodedDataI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 		}
 
 		if len(decodedData) != 0 {
@@ -292,11 +302,15 @@ func TestDecoder_EdgeCases(t *testing.T) {
 		}
 
 		// Decode
-		decodedData, err := DecodeMessage(encodedData, msg, nil)
+		decodedDataI, err := DecodeMessage(encodedData, msg, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode zero values: %v", err)
 		}
 
+		decodedData, ok := decodedDataI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+		}
 		// Verify
 		if decodedData["zero_int"] != int32(0) {
 			t.Errorf("Expected zero_int=0, got %v", decodedData["zero_int"])
@@ -362,9 +376,13 @@ func TestDecoder_EdgeCases(t *testing.T) {
 		}
 
 		// Decode
-		decodedData, err := DecodeMessage(encodedData, msg, nil)
+		decodedDataI, err := DecodeMessage(encodedData, msg, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode extreme values: %v", err)
+		}
+		decodedData, ok := decodedDataI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 		}
 
 		// Verify
@@ -477,9 +495,13 @@ func TestDecoder_NestedMessages(t *testing.T) {
 	}
 
 	// Decode the main message (without registry, should get raw bytes for nested message)
-	decodedData, err := DecodeMessage(encodedData, mainMessage, nil)
+	decodedDataI, err := DecodeMessage(encodedData, mainMessage, nil)
 	if err != nil {
 		t.Fatalf("Failed to decode main message: %v", err)
+	}
+	decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 	}
 
 	// Verify primitive fields
@@ -496,9 +518,13 @@ func TestDecoder_NestedMessages(t *testing.T) {
 		t.Errorf("Expected address to be []byte, got %T", decodedData["address"])
 	} else {
 		// Decode the nested message manually
-		nestedDecoded, err := DecodeMessage(addressBytes, nestedMessage, nil)
+		nestedDecodedI, err := DecodeMessage(addressBytes, nestedMessage, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode nested message: %v", err)
+		}
+		nestedDecoded, ok := nestedDecodedI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 		}
 
 		if nestedDecoded["street"] != "123 Main St" {
@@ -639,9 +665,13 @@ func TestDecoder_MapTypes(t *testing.T) {
 		}
 
 		// Decode
-		decodedData, err := DecodeMessage(encodedData, message, nil)
+		decodedDataI, err := DecodeMessage(encodedData, message, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode empty maps: %v", err)
+		}
+		decodedData, ok := decodedDataI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 		}
 
 		// Should have no map fields in result since they're empty
@@ -716,9 +746,13 @@ func TestDecoder_RecursiveNestedMessages(t *testing.T) {
 	}
 
 	// Decode root
-	decodedData, err := DecodeMessage(encodedData, treeNodeMessage, nil)
+	decodedDataI, err := DecodeMessage(encodedData, treeNodeMessage, nil)
 	if err != nil {
 		t.Fatalf("Failed to decode root: %v", err)
+	}
+	decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 	}
 
 	// Verify root value
@@ -732,10 +766,15 @@ func TestDecoder_RecursiveNestedMessages(t *testing.T) {
 		t.Errorf("Expected left_child to be []byte, got %T", decodedData["left_child"])
 	} else {
 		// Decode left child
-		leftDecoded, err := DecodeMessage(leftChildBytes, treeNodeMessage, nil)
+		leftDecodedI, err := DecodeMessage(leftChildBytes, treeNodeMessage, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode left child: %v", err)
 		}
+		leftDecoded, ok := leftDecodedI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+		}
+
 		if leftDecoded["value"] != int32(2) {
 			t.Errorf("Expected left child value=2, got %v", leftDecoded["value"])
 		}
@@ -747,10 +786,15 @@ func TestDecoder_RecursiveNestedMessages(t *testing.T) {
 		t.Errorf("Expected right_child to be []byte, got %T", decodedData["right_child"])
 	} else {
 		// Decode right child
-		rightDecoded, err := DecodeMessage(rightChildBytes, treeNodeMessage, nil)
+		rightDecodedI, err := DecodeMessage(rightChildBytes, treeNodeMessage, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode right child: %v", err)
 		}
+		rightDecoded, ok := rightDecodedI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+		}
+
 		if rightDecoded["value"] != int32(3) {
 			t.Errorf("Expected right child value=3, got %v", rightDecoded["value"])
 		}
@@ -835,9 +879,13 @@ func TestDecoder_ComplexMixed(t *testing.T) {
 	}
 
 	// Decode
-	decodedData, err := DecodeMessage(encodedData, complexMessage, nil)
+	decodedDataI, err := DecodeMessage(encodedData, complexMessage, nil)
 	if err != nil {
 		t.Fatalf("Failed to decode complex message: %v", err)
+	}
+	decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 	}
 
 	// Verify primitive fields
@@ -853,10 +901,15 @@ func TestDecoder_ComplexMixed(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected metadata to be []byte, got %T", decodedData["metadata"])
 	} else {
-		metadataDecoded, err := DecodeMessage(metadataBytes2, metadataMessage, nil)
+		metadataDecodedI, err := DecodeMessage(metadataBytes2, metadataMessage, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode metadata: %v", err)
 		}
+		metadataDecoded, ok := metadataDecodedI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+		}
+
 		if metadataDecoded["created_at"] != "2023-01-01T00:00:00Z" {
 			t.Errorf("Expected created_at='2023-01-01T00:00:00Z', got %v", metadataDecoded["created_at"])
 		}
@@ -950,11 +1003,14 @@ func TestDecoder_JSONNames(t *testing.T) {
 	}
 
 	// Decode
-	decodedData, err := DecodeMessage(encodedData, complexMessage, nil)
+	decodedDataI, err := DecodeMessage(encodedData, complexMessage, nil)
 	if err != nil {
 		t.Fatalf("Failed to decode complex message: %v", err)
 	}
-
+	decodedData, ok := decodedDataI.(map[string]interface{})
+	if !ok {
+		t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
+	}
 	// Verify primitive fields
 	if decodedData["id"] != int32(12345) {
 		t.Errorf("Expected id=12345, got %v", decodedData["id"])
@@ -968,9 +1024,13 @@ func TestDecoder_JSONNames(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected metadata to be []byte, got %T", decodedData["metadata"])
 	} else {
-		metadataDecoded, err := DecodeMessage(metadataBytes2, metadataMessage, nil)
+		metadataDecodedI, err := DecodeMessage(metadataBytes2, metadataMessage, nil)
 		if err != nil {
 			t.Fatalf("Failed to decode metadata: %v", err)
+		}
+		metadataDecoded, ok := metadataDecodedI.(map[string]interface{})
+		if !ok {
+			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 		}
 		if metadataDecoded["created_at"] != "2023-01-01T00:00:00Z" {
 			t.Errorf("Expected created_at='2023-01-01T00:00:00Z', got %v", metadataDecoded["created_at"])

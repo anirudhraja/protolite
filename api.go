@@ -112,7 +112,15 @@ func (p *protolite) UnmarshalWithSchema(data []byte, messageName string) (map[st
 		return nil, fmt.Errorf("message schema not found: %v", err)
 	}
 
-	return wire.DecodeMessage(data, message, p.registry)
+	decodedMessage, err := wire.DecodeMessage(data, message, p.registry)
+	if err != nil {
+		return nil, err
+	}
+	result, ok := decodedMessage.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected type of map[string]interface{} got %T", decodedMessage)
+	}
+	return result, nil
 }
 
 // UnmarshalToStruct unmarshals protobuf data into a Go struct using reflection
