@@ -63,6 +63,9 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 		messageData map[string]interface{}
 		ok          bool
 	)
+	if data == nil {
+		return nil
+	}
 	if msg.IsListWrapper {
 		messageListData, ok := data.([]interface{})
 		if !ok {

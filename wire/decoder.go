@@ -118,7 +118,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 	}
 	// if its primitive type , add all default values to the message
 	for _, field := range msg.Fields {
-		fieldName:=getFieldName(field)
+		fieldName := getFieldName(field)
 		// add default values only when its not present in result
 		if _, ok := result[fieldName]; !ok {
 			if field.Type.Kind == schema.KindPrimitive { // add default for primitive types except bytes
@@ -137,7 +137,11 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		}
 	}
 	if msg.IsListWrapper {
-		return result[getFieldName(msg.Fields[0])], nil
+		wrappedVal := result[getFieldName(msg.Fields[0])]
+		if wrappedVal == nil {
+			return []interface{}{}, nil
+		}
+		return wrappedVal, nil
 	}
 	return result, nil
 }
