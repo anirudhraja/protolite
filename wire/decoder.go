@@ -43,6 +43,8 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 	mapCollector := make(map[string]map[interface{}]interface{})
 	repeatedCollector := make(map[string][]interface{})
 
+	initNull(result, msg)
+
 	for d.pos < len(d.buf) {
 		// Read field tag using varint decoder
 		tag, err := d.DecodeVarint()
@@ -144,6 +146,12 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		return wrappedVal, nil
 	}
 	return result, nil
+}
+
+func initNull(result map[string]interface{}, msg *schema.Message) {
+	for _, field := range msg.Fields {
+		result[getFieldName(field)] = nil
+	}
 }
 
 // DecodeTypedField routes to the appropriate decoder based on field type
