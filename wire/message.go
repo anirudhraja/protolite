@@ -242,14 +242,31 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 		}
 	}
 
+	var packed bool
+	if field.Type.Kind == schema.KindPrimitive {
+		packed = schema.IsPackedType(field.Type.PrimitiveType)
+	} else if field.Type.Kind == schema.KindEnum {
+		packed = true
+	}
+
 	// For each element in the slice, encode field tag + value
-	for _, element := range slice {
-		// Encode field tag for each element
+	for i, element := range slice {
 		ve := NewVarintEncoder(encoder)
-		wireType := me.getWireType(&field.Type)
-		tag := MakeTag(FieldNumber(field.Number), wireType)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode repeated field tag: %v", err)
+		if i == 0 || !packed {
+			// Encode field tag for each element
+			wireType := me.getWireType(&field.Type)
+			if packed {
+				wireType = WireBytes
+			}
+			tag := MakeTag(FieldNumber(field.Number), wireType)
+			if err := ve.EncodeVarint(uint64(tag)); err != nil {
+				return fmt.Errorf("failed to encode repeated field tag: %v", err)
+			}
+			if packed {
+				if err := ve.EncodeInt32(int32(len(slice))); err != nil {
+					return fmt.Errorf("failed to encode length of field: %v", err)
+				}
+			}
 		}
 
 		// Encode the element value

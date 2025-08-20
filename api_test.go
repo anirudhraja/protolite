@@ -475,7 +475,7 @@ func TestProtolite_Integration(t *testing.T) {
 }
 
 func TestProtolite_UnmarshalWithSchema(t *testing.T) {
-	proto := NewProtolite([]string{"","sampleapp/testdata"})
+	proto := NewProtolite([]string{"", "sampleapp/testdata"})
 
 	t.Run("unmarshal_with_schema", func(t *testing.T) {
 		if err := proto.LoadSchemaFromFile("sampleapp/testdata/post.proto"); err != nil {
@@ -555,6 +555,7 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 				"newsletter": "subscribed",
 			},
 			"created_at": int64(1609459200), // 2021-01-01 00:00:00 UTC
+			"scores":     []int32{42, 39, 21},
 		}
 
 		t.Logf("Original User Data: %+v", userData)
@@ -649,6 +650,19 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 						t.Errorf("Expected first post tag[%d]='%s', got %v", i, tag, tags1[i])
 					}
 				}
+			}
+
+			// Verify scores
+			scores, ok := userMap["scores"].([]interface{})
+			if !ok {
+				t.Fatalf("Expected scores to be a slice, got %T", userMap["scores"])
+			}
+			gotScores := make([]int32, 0, len(scores))
+			for i := 0; i < len(scores); i++ {
+				gotScores = append(gotScores, scores[i].(int32))
+			}
+			if !reflect.DeepEqual(userData["scores"], gotScores) {
+				t.Fatalf("Expected scores to be %v, got %v", userData["scores"], gotScores)
 			}
 
 			t.Logf("First Post: %+v", post1)
