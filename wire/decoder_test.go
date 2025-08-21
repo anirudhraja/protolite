@@ -674,7 +674,6 @@ func TestDecoder_MapTypes(t *testing.T) {
 			t.Fatalf("decoded data must be of type map[string]interface{} , got: %T", decodedDataI)
 		}
 
-		// Should have null valued keys.
 		// Should have no map fields in result since they're empty
 		if len(decodedData) != 0 {
 			t.Errorf("Expected no fields for empty maps, got %v", decodedData)
