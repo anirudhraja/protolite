@@ -46,6 +46,7 @@ message User {
     UserType user_type = 17;
     repeated int32 scores = 27;
     ListContainingNullItemWrapper cool_list = 28;
+    ShowMeNull show_me_null = 29;
 
     message ListContainingNullItemWrapper {
         option wrapper = true;
@@ -55,6 +56,11 @@ message User {
             option wrapper = true;
             google.protobuf.Int32Value item = 1;
         }
+    }
+
+    message ShowMeNull {
+        option show_null = true;
+        google.protobuf.StringValue null = 22;
     }
 }
 

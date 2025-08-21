@@ -557,6 +557,9 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 			"created_at": int64(1609459200), // 2021-01-01 00:00:00 UTC
 			"scores":     []int32{42, 39, 21},
 			"cool_list":  []interface{}{int32(42), nil, int32(39), int32(21)},
+			"show_me_null": map[string]interface{}{
+				"null": nil,
+			},
 		}
 
 		t.Logf("Original User Data: %+v", userData)
@@ -743,6 +746,19 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		}
 		if !reflect.DeepEqual(userData["cool_list"], coolList) {
 			t.Fatalf("Expected cool_list to be %v, got %v", userData["cool_list"], coolList)
+		}
+
+		// Verify show_me_null
+		showMeNull, ok := userMap["show_me_null"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("Expected show_me_null to be a map, got %T", userMap["show_me_null"])
+		}
+		null, ok := showMeNull["null"]
+		if !ok {
+			t.Fatalf("Expected null key present in map")
+		}
+		if null != nil {
+			t.Fatalf("Expected nil value of key null, got %v", null)
 		}
 
 		t.Log("✅ User-Posts relationship test completed successfully!")

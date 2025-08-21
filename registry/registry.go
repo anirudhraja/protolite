@@ -229,8 +229,11 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 			}
 			nestedTypes = append(nestedTypes, msg)
 		case *protoparserparser.Option:
-			if findIsWrapper(b) {
-				msg.IsWrapper = true
+			switch b.OptionName {
+			case optionWrapper, optionsIsListWrapper:
+				msg.IsWrapper = b.Constant == "true"
+			case optionShowNull:
+				msg.ShowNull = b.Constant == "true"
 			}
 		case *protoparserparser.Field:
 			field, err := r.processField(b, allResolvedEntities, prefix)

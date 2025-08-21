@@ -33,6 +33,7 @@ type Message struct {
 	OneofGroups []*Oneof   `json:"oneof_groups"` // oneof groups
 	MapEntry    bool       `json:"map_entry"`    // is this a map entry?
 	IsWrapper   bool       `json:"is_wrapper"`   // is this a wrapper?
+	ShowNull    bool       `json:"show_null"`    // should show null in decode
 }
 
 // Field represents a message field
