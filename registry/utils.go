@@ -176,11 +176,3 @@ func findJSONNameForEnumValue(options []*protoparserparser.EnumValueOption) stri
 	}
 	return ""
 }
-
-func findIsWrapper(opt *protoparserparser.Option) bool {
-	key := strings.Trim(opt.OptionName, `"`)
-	if key == optionsIsListWrapper || key == optionWrapper {
-		return strings.EqualFold(strings.Trim(opt.Constant, `"`), "true")
-	}
-	return false
-}
