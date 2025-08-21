@@ -45,6 +45,17 @@ message User {
     
     UserType user_type = 17;
     repeated int32 scores = 27;
+    ListContainingNullItemWrapper cool_list = 28;
+
+    message ListContainingNullItemWrapper {
+        option wrapper = true;
+        repeated ItemWrapper items = 1;
+
+        message ItemWrapper {
+            option wrapper = true;
+            google.protobuf.Int32Value item = 1;
+        }
+    }
 }
 
 // Nested message within User

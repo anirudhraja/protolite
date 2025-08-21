@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	optionJSONNameKey = "json_name"
+	optionJSONNameKey    = "json_name"
 	optionsIsListWrapper = "ListWrapper"
+	optionWrapper        = "wrapper"
 )
 
 // getAllProtoInfo uses DFS to fetch all the files from all directories passed and stores relevant proto files
@@ -175,8 +176,9 @@ func findJSONNameForEnumValue(options []*protoparserparser.EnumValueOption) stri
 	return ""
 }
 
-func findIsListWrapper(opt *protoparserparser.Option) bool {
-	if strings.Trim(opt.OptionName, `"`) == optionsIsListWrapper {
+func findIsWrapper(opt *protoparserparser.Option) bool {
+	key := strings.Trim(opt.OptionName, `"`)
+	if key == optionsIsListWrapper || key == optionWrapper {
 		return strings.EqualFold(strings.Trim(opt.Constant, `"`), "true")
 	}
 	return false
