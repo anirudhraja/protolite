@@ -66,14 +66,8 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 	if data == nil {
 		return nil
 	}
-	if msg.IsListWrapper {
-		messageListData, ok := data.([]interface{})
-		if !ok {
-			return fmt.Errorf("message value must be []interface{}, got %T", data)
-		}
-		messageData = map[string]interface{}{
-			getFieldName(msg.Fields[0]): messageListData,
-		}
+	if msg.IsWrapper {
+		messageData = map[string]interface{}{getFieldName(msg.Fields[0]): data}
 	} else {
 		// If it's a map, we need to encode it as a message
 		messageData, ok = data.(map[string]interface{})

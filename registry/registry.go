@@ -229,8 +229,11 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 			}
 			nestedTypes = append(nestedTypes, msg)
 		case *protoparserparser.Option:
-			if findIsListWrapper(b) {
-				msg.IsListWrapper = true
+			switch b.OptionName {
+			case optionWrapper, optionsIsListWrapper:
+				msg.IsWrapper = b.Constant == "true"
+			case optionShowNull:
+				msg.ShowNull = b.Constant == "true"
 			}
 		case *protoparserparser.Field:
 			field, err := r.processField(b, allResolvedEntities, prefix)
@@ -272,9 +275,9 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 		}
 	}
 	// validation for list wrapper
-	if msg.IsListWrapper {
-		if len(fields) != 1 && fields[0].Label != schema.LabelRepeated {
-			return nil, fmt.Errorf("ListWrapper message should contain exactly one field of repeated type")
+	if msg.IsWrapper {
+		if len(fields) != 1 {
+			return nil, fmt.Errorf("wrapper message must contain exactly one field")
 		}
 	}
 	msg.NestedTypes = nestedTypes
@@ -370,8 +373,8 @@ func (r *Registry) processEnum(enum *protoparserparser.Enum) (*schema.Enum, erro
 				return nil, err
 			}
 			enumValues = append(enumValues, &schema.EnumValue{
-				Name:   b.Ident,
-				Number: int32(num),
+				Name:     b.Ident,
+				Number:   int32(num),
 				JsonName: findJSONNameForEnumValue(b.EnumValueOptions),
 			})
 		}

@@ -45,6 +45,23 @@ message User {
     
     UserType user_type = 17;
     repeated int32 scores = 27;
+    ListContainingNullItemWrapper cool_list = 28;
+    ShowMeNull show_me_null = 29;
+
+    message ListContainingNullItemWrapper {
+        option wrapper = true;
+        repeated ItemWrapper items = 1;
+
+        message ItemWrapper {
+            option wrapper = true;
+            google.protobuf.Int32Value item = 1;
+        }
+    }
+
+    message ShowMeNull {
+        option show_null = true;
+        google.protobuf.StringValue null = 22;
+    }
 }
 
 // Nested message within User

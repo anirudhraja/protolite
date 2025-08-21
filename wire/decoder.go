@@ -43,6 +43,8 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 	mapCollector := make(map[string]map[interface{}]interface{})
 	repeatedCollector := make(map[string][]interface{})
 
+	initNull(result, msg)
+
 	for d.pos < len(d.buf) {
 		// Read field tag using varint decoder
 		tag, err := d.DecodeVarint()
@@ -136,14 +138,30 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			}
 		}
 	}
-	if msg.IsListWrapper {
+	// when message is wrapper, empty message on wire means
+	// two different values based on wrapped item type. If
+	// wrapped item is of repeated type, it means empty list,
+	// otherwise null.
+	if msg.IsWrapper {
 		wrappedVal := result[getFieldName(msg.Fields[0])]
 		if wrappedVal == nil {
-			return []interface{}{}, nil
+			if msg.Fields[0].Label == schema.LabelRepeated {
+				return []interface{}{}, nil
+			}
+			return nil, nil
 		}
 		return wrappedVal, nil
 	}
 	return result, nil
+}
+
+func initNull(result map[string]interface{}, msg *schema.Message) {
+	if !msg.ShowNull {
+		return
+	}
+	for _, field := range msg.Fields {
+		result[getFieldName(field)] = nil
+	}
 }
 
 // DecodeTypedField routes to the appropriate decoder based on field type
