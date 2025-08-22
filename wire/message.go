@@ -67,7 +67,19 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 		return nil
 	}
 	if msg.IsWrapper {
-		messageData = map[string]interface{}{getFieldName(msg.Fields[0]): data}
+		// mostly a wrapper has single field, except the wrapper of an union.
+		var field *schema.Field
+		if len(msg.Fields) > 0 {
+			field = msg.Fields[0]
+		}
+		if dataMap, ok := data.(map[string]interface{}); ok {
+			if iTypeName, ok := dataMap["__Type"]; ok {
+				if oneOfField := getOneOfField(msg, iTypeName.(string)); oneOfField != nil {
+					field = oneOfField
+				}
+			}
+		}
+		messageData = map[string]interface{}{getFieldName(field): data}
 	} else {
 		// If it's a map, we need to encode it as a message
 		messageData, ok = data.(map[string]interface{})
@@ -76,6 +88,18 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 		}
 	}
 	return me.encodeMessage(messageData, msg)
+}
+
+func getOneOfField(msg *schema.Message, typeName string) *schema.Field {
+	for _, oneOf := range msg.OneofGroups {
+		for _, field := range oneOf.Fields {
+			// json_name is overloaded in union wrapper to store __Type as it was unused.
+			if field.JsonName == typeName {
+				return field
+			}
+		}
+	}
+	return nil
 }
 
 // EncodeMessage encodes a message with the given data

@@ -47,6 +47,7 @@ message User {
     repeated int32 scores = 27;
     ListContainingNullItemWrapper cool_list = 28;
     ShowMeNull show_me_null = 29;
+    WrappedUnion graphql_union = 30;
 
     message ListContainingNullItemWrapper {
         option wrapper = true;
@@ -61,6 +62,20 @@ message User {
     message ShowMeNull {
         option show_null = true;
         google.protobuf.StringValue null = 22;
+    }
+
+    message WrappedUnion {
+        option wrapper = true;
+        oneof item {
+            Number number = 1 [json_name = "Number"];
+            Name name = 2 [json_name = "Name"];
+        }
+        message Number {
+            int32 number = 1;
+        }
+        message Name {
+            string name = 1;
+        }
     }
 }
 
