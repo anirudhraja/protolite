@@ -7,6 +7,8 @@ import (
 	"github.com/anirudhraja/protolite/schema"
 )
 
+const gqlTypeNameField = "__typename"
+
 // Decoder handles low-level protobuf wire format decoding
 type Decoder struct {
 	buf      []byte
@@ -159,7 +161,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			if result[typeName] == nil {
 				result[typeName] = make(map[string]interface{})
 			}
-			result[typeName].(map[string]interface{})["__Type"] = typeName
+			result[typeName].(map[string]interface{})[gqlTypeNameField] = typeName
 		}
 		wrappedVal := result[getFieldName(field)]
 		if wrappedVal == nil {

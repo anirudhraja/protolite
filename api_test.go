@@ -561,8 +561,8 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 				"null": nil,
 			},
 			"graphql_union": map[string]interface{}{
-				"__Type": "Number",
-				"number": int32(42),
+				"__typename": "Number",
+				"number":     int32(42),
 			},
 		}
 

@@ -73,7 +73,7 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 			field = msg.Fields[0]
 		}
 		if dataMap, ok := data.(map[string]interface{}); ok {
-			if iTypeName, ok := dataMap["__Type"]; ok {
+			if iTypeName, ok := dataMap[gqlTypeNameField]; ok {
 				if oneOfField := getOneOfField(msg, iTypeName.(string)); oneOfField != nil {
 					field = oneOfField
 				}
@@ -93,7 +93,7 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 func getOneOfField(msg *schema.Message, typeName string) *schema.Field {
 	for _, oneOf := range msg.OneofGroups {
 		for _, field := range oneOf.Fields {
-			// json_name is overloaded in union wrapper to store __Type as it was unused.
+			// json_name is overloaded in union wrapper to store __typename as it was unused.
 			if field.JsonName == typeName {
 				return field
 			}
