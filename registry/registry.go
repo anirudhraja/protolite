@@ -274,10 +274,10 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 			})
 		}
 	}
-	// validation for list wrapper
+	// validation for wrapper
 	if msg.IsWrapper {
-		if len(fields) != 1 {
-			return nil, fmt.Errorf("wrapper message must contain exactly one field")
+		if len(fields) != 1 && len(oneOfGroups) == 0 {
+			return nil, fmt.Errorf("non-union wrapper message must contain exactly one field")
 		}
 	}
 	msg.NestedTypes = nestedTypes

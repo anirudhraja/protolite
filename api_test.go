@@ -560,6 +560,10 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 			"show_me_null": map[string]interface{}{
 				"null": nil,
 			},
+			"graphql_union": map[string]interface{}{
+				"__typename": "Number",
+				"number":     int32(42),
+			},
 		}
 
 		t.Logf("Original User Data: %+v", userData)
@@ -759,6 +763,15 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		}
 		if null != nil {
 			t.Fatalf("Expected nil value of key null, got %v", null)
+		}
+
+		// Verify graphql_union
+		graphqlUnion, ok := userMap["graphql_union"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("Expected graphql_union to be a map, got %T", userMap["graphql_union"])
+		}
+		if !reflect.DeepEqual(userData["graphql_union"], graphqlUnion) {
+			t.Fatalf("Expected graphql_union to be %v, got %v", userData["graphql_union"], graphqlUnion)
 		}
 
 		t.Log("✅ User-Posts relationship test completed successfully!")
