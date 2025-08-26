@@ -260,11 +260,15 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 				}
 				fieldLabel := schema.LabelOptional
 				f := &schema.Field{
-					Name:     field.FieldName,
-					Number:   int32(fieldNumber),
-					Label:    fieldLabel,
-					Type:     *fieldType,
-					JsonName: findJSONName(field.FieldOptions),
+					Name:       field.FieldName,
+					Number:     int32(fieldNumber),
+					Label:      fieldLabel,
+					Type:       *fieldType,
+					JsonName:   findJSONName(field.FieldOptions),
+					JSONString: isJSONString(field.FieldOptions),
+				}
+				if f.JSONString && (f.Type.Kind != schema.KindWrapper || f.Type.WrapperType != schema.WrapperStringValue) {
+					return nil, fmt.Errorf("expected %s type at %s for json_string, got %+v", schema.WrapperStringValue, f.Name, f.Type)
 				}
 				oneOfFields = append(oneOfFields, f)
 			}
@@ -304,11 +308,15 @@ func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities
 		return nil, err
 	}
 	f := &schema.Field{
-		Name:     field.FieldName,
-		Number:   int32(fieldNumber),
-		Label:    fieldLabel,
-		Type:     *fieldType,
-		JsonName: findJSONName(field.FieldOptions),
+		Name:       field.FieldName,
+		Number:     int32(fieldNumber),
+		Label:      fieldLabel,
+		Type:       *fieldType,
+		JsonName:   findJSONName(field.FieldOptions),
+		JSONString: isJSONString(field.FieldOptions),
+	}
+	if f.JSONString && (f.Type.Kind != schema.KindWrapper || f.Type.WrapperType != schema.WrapperStringValue) {
+		return nil, fmt.Errorf("expected %s type at %s for json_string, got %+v", schema.WrapperStringValue, f.Name, f.Type)
 	}
 	return f, nil
 }
@@ -338,6 +346,15 @@ func (r *Registry) processMapField(field *protoparserparser.MapField, resolvedEn
 		JsonName: findJSONName(field.FieldOptions),
 	}
 	return f, nil
+}
+
+func isJSONString(opts []*protoparserparser.FieldOption) bool {
+	for _, opt := range opts {
+		if opt.OptionName == "json_string" {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Registry) processService(service *protoparserparser.Service) (*schema.Service, error) {

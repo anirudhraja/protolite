@@ -48,6 +48,7 @@ message User {
     ListContainingNullItemWrapper cool_list = 28;
     ShowMeNull show_me_null = 29;
     WrappedUnion graphql_union = 30;
+    google.protobuf.StringValue rawJSON = 31 [json_name = "raw_json", json_string = true];
 
     message ListContainingNullItemWrapper {
         option wrapper = true;

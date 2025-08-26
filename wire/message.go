@@ -187,7 +187,10 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 	if field.Label == schema.LabelRepeated {
 		return me.encodeRepeatedField(encoder, value, field)
 	}
-
+	if field.JSONString {
+		b, _ := json.Marshal(value)
+		value = string(b)
+	}
 	switch field.Type.Kind {
 	case schema.KindPrimitive:
 		return me.encodePrimitiveField(encoder, value, field.Type.PrimitiveType)
@@ -260,6 +263,12 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 			}
 		default:
 			return fmt.Errorf("repeated field value must be a slice, got %T", value)
+		}
+	}
+	if field.JSONString {
+		for i := 0; i < len(slice); i++ {
+			b, _ := json.Marshal(slice[i])
+			slice[i] = string(b)
 		}
 	}
 

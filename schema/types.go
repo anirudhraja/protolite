@@ -45,6 +45,7 @@ type Field struct {
 	DefaultValue string     `json:"default_value"` // default value (proto2)
 	JsonName     string     `json:"json_name"`     // JSON field name
 	OneofIndex   int32      `json:"oneof_index"`   // oneof group index (-1 if not in oneof)
+	JSONString   bool       `json:"json_string"`   // when set raw json string is used to transport gql scalars on wire.
 }
 
 // Oneof represents a oneof group

@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/anirudhraja/protolite/registry"
@@ -243,7 +244,7 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 			"value": value,
 		}, false, nil
 	case schema.KindWrapper:
-		value, err := d.decodeWrapper(fieldType.WrapperType, wireType)
+		value, err := d.decodeWrapper(fieldType.WrapperType, wireType, field.JSONString)
 		return value, false, err
 	default:
 		value, err := d.decodeRawValue(wireType)
@@ -344,7 +345,7 @@ func (d *Decoder) decodePrimitiveHelper(primitiveType schema.PrimitiveType) (any
 }
 
 // decodeWrapper decodes a wrapper type
-func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireType) (interface{}, error) {
+func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireType, jsonString bool) (interface{}, error) {
 	// Wrapper types are encoded as length-delimited messages
 	if wireType != WireBytes {
 		return nil, fmt.Errorf("wrapper type must use wire type bytes, got %d", wireType)
@@ -473,6 +474,11 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 		stringBytes, err := bd.DecodeBytes()
 		if err != nil {
 			return nil, err
+		}
+		if jsonString {
+			data := make(map[string]interface{})
+			_ = json.Unmarshal(stringBytes, &data)
+			return data, nil
 		}
 		return string(stringBytes), nil
 
