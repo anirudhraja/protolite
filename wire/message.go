@@ -79,6 +79,9 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 				}
 			}
 		}
+		if field == nil {
+			return fmt.Errorf("missing union field in %s", msg.Name)
+		}
 		messageData = map[string]interface{}{getFieldName(field): data}
 	} else {
 		// If it's a map, we need to encode it as a message
