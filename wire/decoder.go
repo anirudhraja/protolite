@@ -7,6 +7,8 @@ import (
 	"github.com/anirudhraja/protolite/schema"
 )
 
+const gqlTypeNameField = "__typename"
+
 // Decoder handles low-level protobuf wire format decoding
 type Decoder struct {
 	buf      []byte
@@ -143,7 +145,25 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 	// wrapped item is of repeated type, it means empty list,
 	// otherwise null.
 	if msg.IsWrapper {
-		wrappedVal := result[getFieldName(msg.Fields[0])]
+		var field *schema.Field
+		if len(msg.Fields) > 0 {
+			field = msg.Fields[0]
+		}
+		if len(msg.OneofGroups) > 0 {
+			typeName := msg.OneofGroups[0].Fields[0].JsonName
+			for k := range result {
+				typeName = k
+				break
+			}
+			if oneOfField := getOneOfField(msg, typeName); oneOfField != nil {
+				field = oneOfField
+			}
+			if result[typeName] == nil {
+				result[typeName] = make(map[string]interface{})
+			}
+			result[typeName].(map[string]interface{})[gqlTypeNameField] = typeName
+		}
+		wrappedVal := result[getFieldName(field)]
 		if wrappedVal == nil {
 			if msg.Fields[0].Label == schema.LabelRepeated {
 				return []interface{}{}, nil
