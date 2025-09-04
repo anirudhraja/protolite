@@ -564,6 +564,10 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 				"__typename": "Number",
 				"number":     int32(42),
 			},
+			"raw_json": map[string]interface{}{
+				"lat":  1.23,
+				"long": 4.56,
+			},
 		}
 
 		t.Logf("Original User Data: %+v", userData)
@@ -772,6 +776,15 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		}
 		if !reflect.DeepEqual(userData["graphql_union"], graphqlUnion) {
 			t.Fatalf("Expected graphql_union to be %v, got %v", userData["graphql_union"], graphqlUnion)
+		}
+
+		// Verify raw_json
+		rawJSON, ok := userMap["raw_json"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("Expected raw_json to be a map, got %T", userMap["raw_json"])
+		}
+		if !reflect.DeepEqual(userData["raw_json"], rawJSON) {
+			t.Fatalf("Expected raw_json to be %v, got %v", userData["raw_json"], rawJSON)
 		}
 
 		t.Log("✅ User-Posts relationship test completed successfully!")
