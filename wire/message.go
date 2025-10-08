@@ -405,15 +405,19 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 	case schema.TypeFloat:
 		v, ok := value.(float32)
 		if !ok {
-			jsonVal, ok := value.(json.Number)
-			if !ok {
-				return fmt.Errorf("expected float32, got %T", value)
+			if w, ok := value.(float64); ok {
+				v = float32(w)
+			} else {
+				jsonVal, ok := value.(json.Number)
+				if !ok {
+					return fmt.Errorf("expected float32, got %T", value)
+				}
+				val, err := strconv.ParseFloat(jsonVal.String(), 32)
+				if err != nil {
+					return err
+				}
+				v = float32(val)
 			}
-			val, err := strconv.ParseFloat(jsonVal.String(), 32)
-			if err != nil {
-				return err
-			}
-			v = float32(val)
 		}
 		return NewFixedEncoder(encoder).EncodeFloat32(v)
 	case schema.TypeDouble:
