@@ -38,14 +38,15 @@ type Message struct {
 
 // Field represents a message field
 type Field struct {
-	Name         string     `json:"name"`          // "user_name"
-	Number       int32      `json:"number"`        // 1
-	Label        FieldLabel `json:"label"`         // optional, required, repeated
-	Type         FieldType  `json:"type"`          // field type information
-	DefaultValue string     `json:"default_value"` // default value (proto2)
-	JsonName     string     `json:"json_name"`     // JSON field name
-	OneofIndex   int32      `json:"oneof_index"`   // oneof group index (-1 if not in oneof)
-	JSONString   bool       `json:"json_string"`   // when set raw json string is used to transport gql scalars on wire.
+	Name            string     `json:"name"`          // "user_name"
+	Number          int32      `json:"number"`        // 1
+	Label           FieldLabel `json:"label"`         // optional, required, repeated
+	Type            FieldType  `json:"type"`          // field type information
+	DefaultValue    string     `json:"default_value"` // default value (proto2)
+	JsonName        string     `json:"json_name"`     // JSON field name
+	OneofIndex      int32      `json:"oneof_index"`   // oneof group index (-1 if not in oneof)
+	JSONString      bool       `json:"json_string"`   // when set raw json string is used to transport gql scalars on wire.
+	WrapperFieldKey string     `json:"wrapper_field"` // when set, indicates the field is a wrapper around another field. e.g., `google.protobuf.StringValue` wraps around `string`
 }
 
 // Oneof represents a oneof group

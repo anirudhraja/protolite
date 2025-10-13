@@ -48,6 +48,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 
 	initNull(result, msg)
 
+	wrapperFields := make([]*schema.Field, 0)
 	for d.pos < len(d.buf) {
 		// Read field tag using varint decoder
 		tag, err := d.DecodeVarint()
@@ -110,6 +111,10 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			// Handle regular fields
 			result[fieldName] = value
 		}
+
+		if field.WrapperFieldKey != "" {
+			wrapperFields = append(wrapperFields, field)
+		}
 	}
 
 	// Add collected maps to result
@@ -141,6 +146,19 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			}
 		}
 	}
+
+	for _, field := range wrapperFields {
+		fieldName := getFieldName(field)
+		val := result[fieldName]
+		if val == nil {
+			delete(result, fieldName) // init null initialises these fields - can be removed once its removed
+		} else if valMap, ok := val.(map[string]interface{}); ok {
+			result[fieldName] = valMap[field.WrapperFieldKey]
+		} else {
+			return nil, fmt.Errorf("expected map for wrapper field %s, got %T", field.Name, result[fieldName])
+		}
+	}
+
 	// when message is wrapper, empty message on wire means
 	// two different values based on wrapped item type. If
 	// wrapped item is of repeated type, it means empty list,

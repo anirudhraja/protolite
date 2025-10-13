@@ -121,14 +121,18 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 	}
 	var entries []fieldEntry
 	for fieldName, fieldValue := range data {
-		// if there is no value , no need to iterate over the key
-		if fieldValue == nil {
-			continue
-		}
 		field := me.findFieldByName(msg, fieldName)
 		if field == nil {
 			continue // Skip unknown fields
 		}
+		if field.WrapperFieldKey != "" {
+			fieldValue = map[string]interface{}{
+				field.WrapperFieldKey: fieldValue,
+			}
+		} else if fieldValue == nil {
+			continue
+		}
+
 		entries = append(entries, fieldEntry{
 			name:   fieldName,
 			value:  fieldValue,

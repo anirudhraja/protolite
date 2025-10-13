@@ -15,6 +15,7 @@ const (
 	optionJSONNameKey    = "json_name"
 	optionsIsListWrapper = "ListWrapper"
 	optionWrapper        = "wrapper"
+	optionFieldWrapper   = "field_wrapper_key"
 	optionShowNull       = "show_null"
 )
 

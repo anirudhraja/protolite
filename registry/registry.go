@@ -292,6 +292,15 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 	return msg, nil
 }
 
+func getFieldWrapperOption(field *protoparserparser.Field) string {
+	for _, opt := range field.FieldOptions {
+		if opt.OptionName == optionFieldWrapper {
+			return opt.Constant
+		}
+	}
+	return ""
+}
+
 func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities map[string]struct{}, prefix string) (*schema.Field, error) {
 	fieldNumber, err := strconv.ParseInt(field.FieldNumber, 10, 32)
 	if err != nil {
@@ -308,12 +317,13 @@ func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities
 		return nil, err
 	}
 	f := &schema.Field{
-		Name:       field.FieldName,
-		Number:     int32(fieldNumber),
-		Label:      fieldLabel,
-		Type:       *fieldType,
-		JsonName:   findJSONName(field.FieldOptions),
-		JSONString: isJSONString(field.FieldOptions),
+		Name:            field.FieldName,
+		Number:          int32(fieldNumber),
+		Label:           fieldLabel,
+		Type:            *fieldType,
+		JsonName:        findJSONName(field.FieldOptions),
+		JSONString:      isJSONString(field.FieldOptions),
+		WrapperFieldKey: getFieldWrapperOption(field),
 	}
 	if f.JSONString && (f.Type.Kind != schema.KindWrapper || f.Type.WrapperType != schema.WrapperStringValue) {
 		return nil, fmt.Errorf("expected %s type at %s for json_string, got %+v", schema.WrapperStringValue, f.Name, f.Type)
