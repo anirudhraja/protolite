@@ -260,12 +260,13 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 				}
 				fieldLabel := schema.LabelOptional
 				f := &schema.Field{
-					Name:       field.FieldName,
-					Number:     int32(fieldNumber),
-					Label:      fieldLabel,
-					Type:       *fieldType,
-					JsonName:   findJSONName(field.FieldOptions),
-					JSONString: isJSONString(field.FieldOptions),
+					Name:            field.FieldName,
+					Number:          int32(fieldNumber),
+					Label:           fieldLabel,
+					Type:            *fieldType,
+					JsonName:        findJSONName(field.FieldOptions),
+					JSONString:      isJSONString(field.FieldOptions),
+					WrapperFieldKey: getFieldWrapperOption(field.FieldOptions),
 				}
 				if f.JSONString && (f.Type.Kind != schema.KindWrapper || f.Type.WrapperType != schema.WrapperStringValue) {
 					return nil, fmt.Errorf("expected %s type at %s for json_string, got %+v", schema.WrapperStringValue, f.Name, f.Type)
@@ -292,8 +293,8 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 	return msg, nil
 }
 
-func getFieldWrapperOption(field *protoparserparser.Field) string {
-	for _, opt := range field.FieldOptions {
+func getFieldWrapperOption(opts []*protoparserparser.FieldOption) string {
+	for _, opt := range opts {
 		if opt.OptionName == optionFieldWrapper {
 			return opt.Constant
 		}
@@ -323,7 +324,7 @@ func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities
 		Type:            *fieldType,
 		JsonName:        findJSONName(field.FieldOptions),
 		JSONString:      isJSONString(field.FieldOptions),
-		WrapperFieldKey: getFieldWrapperOption(field),
+		WrapperFieldKey: getFieldWrapperOption(field.FieldOptions),
 	}
 	if f.JSONString && (f.Type.Kind != schema.KindWrapper || f.Type.WrapperType != schema.WrapperStringValue) {
 		return nil, fmt.Errorf("expected %s type at %s for json_string, got %+v", schema.WrapperStringValue, f.Name, f.Type)
@@ -353,7 +354,8 @@ func (r *Registry) processMapField(field *protoparserparser.MapField, resolvedEn
 			MapKey:   mapKeyType,
 			MapValue: mapValueType,
 		},
-		JsonName: findJSONName(field.FieldOptions),
+		JsonName:        findJSONName(field.FieldOptions),
+		WrapperFieldKey: getFieldWrapperOption(field.FieldOptions),
 	}
 	return f, nil
 }

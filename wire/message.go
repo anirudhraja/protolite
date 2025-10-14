@@ -121,15 +121,12 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 	}
 	var entries []fieldEntry
 	for fieldName, fieldValue := range data {
+		// if there is no value , no need to iterate over the key
 		field := me.findFieldByName(msg, fieldName)
 		if field == nil {
 			continue // Skip unknown fields
 		}
-		if field.WrapperFieldKey != "" {
-			fieldValue = map[string]interface{}{
-				field.WrapperFieldKey: fieldValue,
-			}
-		} else if fieldValue == nil {
+		if fieldValue == nil && field.WrapperFieldKey == "" {
 			continue
 		}
 
@@ -199,6 +196,11 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 	case schema.KindPrimitive:
 		return me.encodePrimitiveField(encoder, value, field.Type.PrimitiveType)
 	case schema.KindMessage:
+		if field.WrapperFieldKey != "" {
+			value = map[string]interface{}{
+				field.WrapperFieldKey: value,
+			}
+		}
 		return me.encodeMessageField(encoder, value, field.Type.MessageType)
 	case schema.KindEnum:
 		return me.encodeEnumField(encoder, value, field.Type)
