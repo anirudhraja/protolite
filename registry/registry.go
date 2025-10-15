@@ -106,6 +106,7 @@ func (r *Registry) resolveProtoFile(protoPath string) ([]string, error) {
 			break
 		}
 	}
+	parsedProtoBody.ProtoBody = append(parsedProtoBody.ProtoBody, getNullTrackerMessages()...)
 	allEntities = append(allEntities, addNestedEntities(parsedProtoBody.ProtoBody, packageName, packageName)...)
 	return allEntities, nil
 }
@@ -158,7 +159,6 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 		Enums:    []*schema.Enum{},
 		Services: []*schema.Service{},
 	}
-
 	// preprocess the imports first and add package name to each entity
 	for _, body := range parsedProtoBody.ProtoBody {
 		switch b := body.(type) {
@@ -181,19 +181,19 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 		case *protoparserparser.Message:
 			msg, err := r.processMessage(b, allResolvedEntities, protoFile.Package)
 			if err != nil {
-				return fmt.Errorf("Message %s processing failed with err: %v", b.MessageName,err)
+				return fmt.Errorf("Message %s processing failed with err: %v", b.MessageName, err)
 			}
 			protoFile.Messages = append(protoFile.Messages, msg)
 		case *protoparserparser.Enum:
 			enum, err := r.processEnum(b)
 			if err != nil {
-				return fmt.Errorf("Enum %s processing failed with err: %v", b.EnumName,err)
+				return fmt.Errorf("Enum %s processing failed with err: %v", b.EnumName, err)
 			}
 			protoFile.Enums = append(protoFile.Enums, enum)
 		case *protoparserparser.Service:
 			service, err := r.processService(b)
 			if err != nil {
-				return fmt.Errorf("Service %s processing failed with err: %v", b.ServiceName,err)
+				return fmt.Errorf("Service %s processing failed with err: %v", b.ServiceName, err)
 			}
 			protoFile.Services = append(protoFile.Services, service)
 
@@ -202,6 +202,31 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 	// Store in the ProtoRepo
 	r.repo.ProtoFiles[filePath] = protoFile
 	return nil
+}
+
+func getNullTrackerMessages() []protoparserparser.Visitee {
+	nullTrackerMsg := &protoparserparser.Message{
+		MessageName: schema.NullTrackerWrapperMessageName,
+		MessageBody: []protoparserparser.Visitee{
+			&protoparserparser.Field{
+				FieldName:   schema.NullTrackerWrapperInternalFieldName,
+				Type:        schema.NullTrackerWrapperInternalMessageName,
+				FieldNumber: "1",
+			},
+		},
+	}
+	nullTrackerStruct := &protoparserparser.Message{
+		MessageName: schema.NullTrackerWrapperInternalMessageName,
+		MessageBody: []protoparserparser.Visitee{
+			&protoparserparser.Field{
+				FieldName:   schema.NullTrackerNullFieldsFieldName,
+				Type:        "int32",
+				IsRepeated:  true,
+				FieldNumber: "1",
+			},
+		},
+	}
+	return []protoparserparser.Visitee{nullTrackerMsg, nullTrackerStruct}
 }
 
 // parseMessage parses a message definition starting from the given line index
@@ -234,6 +259,13 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 				msg.IsWrapper = b.Constant == "true"
 			case optionShowNull:
 				msg.ShowNull = b.Constant == "true"
+			case optionTrackNull:
+				msg.TrackNull = b.Constant == "true"
+				if field, err := r.getNullTrackerField(allResolvedEntities, prefix); err != nil {
+					return nil, err
+				} else {
+					fields = append(fields, field)
+				}
 			}
 		case *protoparserparser.Field:
 			field, err := r.processField(b, allResolvedEntities, prefix)
@@ -290,6 +322,19 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 	msg.OneofGroups = oneOfGroups
 
 	return msg, nil
+}
+
+func (r *Registry) getNullTrackerField(resolvedEntities map[string]struct{}, prefix string) (*schema.Field, error) {
+	fieldType, err := r.convertProtoType(schema.NullTrackerWrapperMessageName, resolvedEntities, prefix)
+	if err != nil {
+		return nil, err
+	}
+	return &schema.Field{
+		Name:   schema.NullTrackerFieldName,
+		Number: schema.NullTrackerFieldNumber,
+		Label:  schema.LabelOptional,
+		Type:   *fieldType,
+	}, nil
 }
 
 func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities map[string]struct{}, prefix string) (*schema.Field, error) {

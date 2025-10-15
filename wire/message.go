@@ -122,20 +122,39 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 		field  *schema.Field
 	}
 	var entries []fieldEntry
+	nullFields := make([]int32, 0)
 	for fieldName, fieldValue := range data {
-		// if there is no value , no need to iterate over the key
-		if fieldValue == nil {
-			continue
-		}
 		field := me.findFieldByName(msg, fieldName)
 		if field == nil {
 			continue // Skip unknown fields
 		}
+		// if there is no value , no need to iterate over the key
+		if fieldValue == nil {
+			nullFields = append(nullFields, field.Number)
+			continue
+		}
+
 		entries = append(entries, fieldEntry{
 			name:   fieldName,
 			value:  fieldValue,
 			number: field.Number,
 			field:  field,
+		})
+	}
+	if msg.TrackNull {
+		nullTrackerField := me.findFieldByName(msg, schema.NullTrackerFieldName)
+		if nullTrackerField == nil {
+			return fmt.Errorf("message %s is configured to track nulls but missing null tracker field", msg.Name)
+		}
+		entries = append(entries, fieldEntry{
+			name: schema.NullTrackerFieldName,
+			value: map[string]interface{}{
+				schema.NullTrackerWrapperInternalFieldName: map[string]interface{}{
+					schema.NullTrackerNullFieldsFieldName: nullFields,
+				},
+			},
+			number: nullTrackerField.Number,
+			field:  nullTrackerField,
 		})
 	}
 	// Sort entries by field number in increasing order.
