@@ -234,6 +234,13 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 				msg.IsWrapper = b.Constant == "true"
 			case optionShowNull:
 				msg.ShowNull = b.Constant == "true"
+			case optionTrackNull:
+				msg.TrackNull = b.Constant == "true"
+				if field, err := r.getNullTrackerField(allResolvedEntities, prefix); err != nil {
+					return nil, err
+				} else {
+					fields = append(fields, field)
+				}
 			}
 		case *protoparserparser.Field:
 			field, err := r.processField(b, allResolvedEntities, prefix)
@@ -290,6 +297,19 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 	msg.OneofGroups = oneOfGroups
 
 	return msg, nil
+}
+
+func (r *Registry) getNullTrackerField(resolvedEntities map[string]struct{}, prefix string) (*schema.Field, error) {
+	fieldType, err := r.convertProtoType(schema.NullTrackerWrapperMessageName, resolvedEntities, prefix)
+	if err != nil {
+		return nil, err
+	}
+	return &schema.Field{
+		Name:   schema.NullTrackerFieldName,
+		Number: schema.NullTrackerFieldNumber,
+		Label:  schema.LabelOptional,
+		Type:   *fieldType,
+	}, nil
 }
 
 func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities map[string]struct{}, prefix string) (*schema.Field, error) {

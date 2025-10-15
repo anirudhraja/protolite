@@ -34,6 +34,7 @@ type Message struct {
 	MapEntry    bool       `json:"map_entry"`    // is this a map entry?
 	IsWrapper   bool       `json:"is_wrapper"`   // is this a wrapper?
 	ShowNull    bool       `json:"show_null"`    // should show null in decode
+	TrackNull   bool       `json:"track_null"`   // should track null in decode
 }
 
 // Field represents a message field
@@ -61,6 +62,12 @@ const (
 	LabelOptional FieldLabel = "optional"
 	LabelRequired FieldLabel = "required"
 	LabelRepeated FieldLabel = "repeated"
+)
+
+const (
+	NullTrackerFieldNumber        int32  = 5000 // reserved field number for null tracker
+	NullTrackerFieldName          string = "_null_tracker"
+	NullTrackerWrapperMessageName string = "OTPNullTrackerWrapper"
 )
 
 // FieldType represents field type information
