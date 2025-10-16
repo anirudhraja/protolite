@@ -3,6 +3,7 @@ package wire
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 
@@ -341,17 +342,9 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		}
 		return NewBytesEncoder(encoder).EncodeBytes(v)
 	case schema.TypeInt32:
-		v, ok := value.(int32)
-		if !ok {
-			jsonVal, ok := value.(json.Number)
-			if !ok {
-				return fmt.Errorf("expected int32, got %T", value)
-			}
-			val, err := strconv.Atoi(jsonVal.String())
-			if err != nil {
-				return err
-			}
-			v = int32(val)
+		v, err := convertToInt32(value)
+		if err != nil {
+			return err
 		}
 		return NewVarintEncoder(encoder).EncodeInt32(v)
 	case schema.TypeInt64:
@@ -713,18 +706,9 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 			return err
 		}
 		var val int32
-		switch v := actualValue.(type) {
-		case int32:
-			val = v
-		case json.Number:
-			var i64 int64
-			i64, err = v.Int64()
-			if err != nil {
-				return fmt.Errorf("invalid int32: %v", err)
-			}
-			val = int32(i64)
-		default:
-			return fmt.Errorf("unexpected type for int32: %T", actualValue)
+		val, err = convertToInt32(actualValue)
+		if err != nil {
+			return err
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
 		if err := ve.EncodeVarint(uint64(tag)); err != nil {
@@ -821,6 +805,29 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 	// Now encode the wrapper message bytes as a length-delimited field
 	be := NewBytesEncoder(encoder)
 	return be.EncodeBytes(wrapperEncoder.Bytes())
+}
+
+func convertToInt32(value interface{}) (int32, error) {
+	switch v := value.(type) {
+	case int32:
+		return v, nil
+	case int64:
+		if v < math.MinInt32 || v > math.MaxInt32 {
+			return 0, fmt.Errorf("value %d out of int32 range", v)
+		}
+		return int32(v), nil
+	case json.Number:
+		i64, err := v.Int64()
+		if err != nil {
+			return 0, fmt.Errorf("invalid int32: %v", err)
+		}
+		if i64 < math.MinInt32 || i64 > math.MaxInt32 {
+			return 0, fmt.Errorf("value %d out of int32 range", i64)
+		}
+		return int32(i64), nil
+	default:
+		return 0, fmt.Errorf("unexpected type for int32: %T", value)
+	}
 }
 
 // encodeMapField encodes a map field
