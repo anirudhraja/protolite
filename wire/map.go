@@ -224,25 +224,22 @@ func (me *MapEncoder) EncodeMapEntry(key, value interface{}, keyType, valueType 
 	// Encode key (field number 1)
 	ve := NewVarintEncoder(entryEncoder)
 	keyTag := MakeTag(FieldNumber(1), me.getWireType(keyType))
-	if err := ve.EncodeVarint(uint64(keyTag)); err != nil {
-		return err
-	}
+	ve.EncodeVarint(uint64(keyTag))
 	if err := me.encodeMapField(entryEncoder, key, keyType); err != nil {
 		return err
 	}
 
 	// Encode value (field number 2)
 	valueTag := MakeTag(FieldNumber(2), me.getWireType(valueType))
-	if err := ve.EncodeVarint(uint64(valueTag)); err != nil {
-		return err
-	}
+	ve.EncodeVarint(uint64(valueTag))
 	if err := me.encodeMapField(entryEncoder, value, valueType); err != nil {
 		return err
 	}
 
 	// Encode the complete entry as length-delimited bytes
 	be := NewBytesEncoder(me.encoder)
-	return be.EncodeBytes(entryEncoder.buf)
+	be.EncodeBytes(entryEncoder.buf)
+	return nil
 }
 
 // EncodeMap encodes a complete map
@@ -251,9 +248,7 @@ func (me *MapEncoder) EncodeMap(mapData map[interface{}]interface{}, keyType, va
 		// Encode field tag
 		ve := NewVarintEncoder(me.encoder)
 		tag := MakeTag(FieldNumber(fieldNumber), WireBytes)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return err
-		}
+		ve.EncodeVarint(uint64(tag))
 
 		// Encode map entry
 		if err := me.EncodeMapEntry(key, value, keyType, valueType); err != nil {
@@ -285,55 +280,68 @@ func (me *MapEncoder) encodePrimitiveField(encoder *Encoder, value interface{}, 
 		if !ok {
 			return fmt.Errorf("expected string, got %T", value)
 		}
-		return NewBytesEncoder(encoder).EncodeString(v)
+		NewBytesEncoder(encoder).EncodeString(v)
+		return nil
 	case schema.TypeBytes:
 		v, ok := value.([]byte)
 		if !ok {
 			return fmt.Errorf("expected []byte, got %T", value)
 		}
-		return NewBytesEncoder(encoder).EncodeBytes(v)
+		NewBytesEncoder(encoder).EncodeBytes(v)
+		return nil
 	case schema.TypeInt32:
 		v, ok := value.(int32)
 		if !ok {
 			return fmt.Errorf("expected int32, got %T", value)
 		}
-		return NewVarintEncoder(encoder).EncodeInt32(v)
+		NewVarintEncoder(encoder).EncodeInt32(v)
+		return nil
 	case schema.TypeInt64:
 		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("expected int64, got %T", value)
 		}
-		return NewVarintEncoder(encoder).EncodeInt64(v)
+		NewVarintEncoder(encoder).EncodeInt64(v)
+		return nil
 	case schema.TypeUint32:
 		v, ok := value.(uint32)
 		if !ok {
 			return fmt.Errorf("expected uint32, got %T", value)
 		}
-		return NewVarintEncoder(encoder).EncodeUint32(v)
+		NewVarintEncoder(encoder).EncodeUint32(v)
+		return nil
 	case schema.TypeUint64:
 		v, ok := value.(uint64)
 		if !ok {
 			return fmt.Errorf("expected uint64, got %T", value)
 		}
-		return NewVarintEncoder(encoder).EncodeUint64(v)
+		NewVarintEncoder(encoder).EncodeUint64(v)
+		return nil
 	case schema.TypeBool:
 		v, ok := value.(bool)
 		if !ok {
 			return fmt.Errorf("expected bool, got %T", value)
 		}
-		return NewVarintEncoder(encoder).EncodeBool(v)
+		NewVarintEncoder(encoder).EncodeBool(v)
+		return nil
 	case schema.TypeFloat:
 		v, ok := value.(float32)
 		if !ok {
 			return fmt.Errorf("expected float32, got %T", value)
 		}
-		return NewFixedEncoder(encoder).EncodeFloat32(v)
+		if err := NewFixedEncoder(encoder).EncodeFloat32(v); err != nil {
+			return err
+		}
+		return nil
 	case schema.TypeDouble:
 		v, ok := value.(float64)
 		if !ok {
 			return fmt.Errorf("expected float64, got %T", value)
 		}
-		return NewFixedEncoder(encoder).EncodeFloat64(v)
+		if err := NewFixedEncoder(encoder).EncodeFloat64(v); err != nil {
+			return err
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
 	}
@@ -347,7 +355,8 @@ func (me *MapEncoder) encodeMessageField(encoder *Encoder, value interface{}) er
 	}
 
 	be := NewBytesEncoder(encoder)
-	return be.EncodeBytes(messageBytes)
+	be.EncodeBytes(messageBytes)
+	return nil
 }
 
 // encodeEnumField encodes an enum field
@@ -363,7 +372,8 @@ func (me *MapEncoder) encodeEnumField(encoder *Encoder, value interface{}, field
 	for _, en := range enum.Values {
 		if en.Name == enumValue {
 			ve := NewVarintEncoder(encoder)
-			return ve.EncodeEnum(en.Number)
+			ve.EncodeEnum(en.Number)
+			return nil
 		}
 	}
 	return fmt.Errorf("cannot find field value %s in the enum %v", enumValue, enum.Values)
