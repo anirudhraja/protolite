@@ -2,7 +2,6 @@ package wire
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/anirudhraja/protolite/registry"
 	"github.com/anirudhraja/protolite/schema"
@@ -52,7 +51,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		// Read field tag using varint decoder
 		tag, err := d.DecodeVarint()
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode message %s: %v", msg.Name, err)
+			return nil, wrapDecodingFieldError(err, msg.Name)
 		}
 
 		fieldNumber, wireType := ParseTag(Tag(tag))
@@ -80,7 +79,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		if field == nil {
 			err := d.skipField(wireType)
 			if err != nil {
-				return nil, fmt.Errorf("failed to decode message %s: %v", msg.Name, err)
+				return nil, wrapDecodingFieldError(err, msg.Name)
 			}
 			continue
 		}
@@ -88,7 +87,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		// Decode using appropriate decoder
 		value, isPackedType, err := d.DecodeTypedField(field, wireType)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode field %s: %v", field.Name, err)
+			return nil, wrapDecodingFieldError(err, fieldName)
 		}
 
 		// Handle different field types
@@ -263,7 +262,7 @@ func (d *Decoder) decodePrimitive(field *schema.Field, wireType WireType) (inter
 		if schema.IsPackedType(primitiveType) {
 			// double check to ensure field is repeated
 			if field.Label != schema.LabelRepeated {
-				return nil, false, fmt.Errorf("wire type (2) for primitive scalars has to be repeated")
+				return nil, false, newFieldError("wire type (2) for primitive scalars has to be repeated")
 			}
 			vd := NewVarintDecoder(d)
 			length, err := vd.DecodeVarint()
@@ -345,21 +344,21 @@ func (d *Decoder) decodePrimitiveHelper(primitiveType schema.PrimitiveType) (any
 			return fd.DecodeFloat64()
 		}
 	}
-	return nil, fmt.Errorf("unsupported primitive type: %v", primitiveType)
+	return nil, newFieldError("unsupported primitive type: %v", primitiveType)
 }
 
 // decodeWrapper decodes a wrapper type
 func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireType, jsonString bool) (interface{}, error) {
 	// Wrapper types are encoded as length-delimited messages
 	if wireType != WireBytes {
-		return nil, fmt.Errorf("wrapper type must use wire type bytes, got %d", wireType)
+		return nil, newFieldError("wrapper type must use wire type bytes, got %d", wireType)
 	}
 
 	// Decode the wrapper message bytes
 	bd := NewBytesDecoder(d)
 	wrapperBytes, err := bd.DecodeBytes()
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode wrapper message bytes: %v", err)
+		return nil, newFieldError("failed to decode wrapper message bytes: %v", err)
 	}
 
 	// Create a new decoder for the wrapper message content
@@ -395,33 +394,33 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 	// Decode the field tag
 	tag, err := wrapperDecoder.DecodeVarint()
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode wrapper field tag: %v", err)
+		return nil, newFieldError("failed to decode wrapper field tag: %v", err)
 	}
 
 	fieldNumber, valueWireType := ParseTag(Tag(tag))
 	if fieldNumber != 1 {
-		return nil, fmt.Errorf("expected field number 1 in wrapper, got %d", fieldNumber)
+		return nil, newFieldError("expected field number 1 in wrapper, got %d", fieldNumber)
 	}
 
 	// Decode the actual value based on wrapper type
 	switch wrapperType {
 	case schema.WrapperDoubleValue:
 		if valueWireType != WireFixed64 {
-			return nil, fmt.Errorf("expected fixed64 wire type for DoubleValue, got %d", valueWireType)
+			return nil, newFieldError("expected fixed64 wire type for DoubleValue, got %d", valueWireType)
 		}
 		fd := NewFixedDecoder(wrapperDecoder)
 		return fd.DecodeFloat64()
 
 	case schema.WrapperFloatValue:
 		if valueWireType != WireFixed32 {
-			return nil, fmt.Errorf("expected fixed32 wire type for FloatValue, got %d", valueWireType)
+			return nil, newFieldError("expected fixed32 wire type for FloatValue, got %d", valueWireType)
 		}
 		fd := NewFixedDecoder(wrapperDecoder)
 		return fd.DecodeFloat32()
 
 	case schema.WrapperInt64Value:
 		if valueWireType != WireVarint {
-			return nil, fmt.Errorf("expected varint wire type for Int64Value, got %d", valueWireType)
+			return nil, newFieldError("expected varint wire type for Int64Value, got %d", valueWireType)
 		}
 		vd := NewVarintDecoder(wrapperDecoder)
 		rawValue, err := vd.DecodeVarint()
@@ -432,14 +431,14 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 
 	case schema.WrapperUInt64Value:
 		if valueWireType != WireVarint {
-			return nil, fmt.Errorf("expected varint wire type for UInt64Value, got %d", valueWireType)
+			return nil, newFieldError("expected varint wire type for UInt64Value, got %d", valueWireType)
 		}
 		vd := NewVarintDecoder(wrapperDecoder)
 		return vd.DecodeVarint()
 
 	case schema.WrapperInt32Value:
 		if valueWireType != WireVarint {
-			return nil, fmt.Errorf("expected varint wire type for Int32Value, got %d", valueWireType)
+			return nil, newFieldError("expected varint wire type for Int32Value, got %d", valueWireType)
 		}
 		vd := NewVarintDecoder(wrapperDecoder)
 		rawValue, err := vd.DecodeVarint()
@@ -450,7 +449,7 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 
 	case schema.WrapperUInt32Value:
 		if valueWireType != WireVarint {
-			return nil, fmt.Errorf("expected varint wire type for UInt32Value, got %d", valueWireType)
+			return nil, newFieldError("expected varint wire type for UInt32Value, got %d", valueWireType)
 		}
 		vd := NewVarintDecoder(wrapperDecoder)
 		rawValue, err := vd.DecodeVarint()
@@ -461,7 +460,7 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 
 	case schema.WrapperBoolValue:
 		if valueWireType != WireVarint {
-			return nil, fmt.Errorf("expected varint wire type for BoolValue, got %d", valueWireType)
+			return nil, newFieldError("expected varint wire type for BoolValue, got %d", valueWireType)
 		}
 		vd := NewVarintDecoder(wrapperDecoder)
 		rawValue, err := vd.DecodeVarint()
@@ -472,7 +471,7 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 
 	case schema.WrapperStringValue:
 		if valueWireType != WireBytes {
-			return nil, fmt.Errorf("expected bytes wire type for StringValue, got %d", valueWireType)
+			return nil, newFieldError("expected bytes wire type for StringValue, got %d", valueWireType)
 		}
 		bd := NewBytesDecoder(wrapperDecoder)
 		stringBytes, err := bd.DecodeBytes()
@@ -488,13 +487,13 @@ func (d *Decoder) decodeWrapper(wrapperType schema.WrapperType, wireType WireTyp
 
 	case schema.WrapperBytesValue:
 		if valueWireType != WireBytes {
-			return nil, fmt.Errorf("expected bytes wire type for BytesValue, got %d", valueWireType)
+			return nil, newFieldError("expected bytes wire type for BytesValue, got %d", valueWireType)
 		}
 		bd := NewBytesDecoder(wrapperDecoder)
 		return bd.DecodeBytes()
 
 	default:
-		return nil, fmt.Errorf("unsupported wrapper type: %s", wrapperType)
+		return nil, newFieldError("unsupported wrapper type: %s", wrapperType)
 	}
 }
 
@@ -514,7 +513,7 @@ func (d *Decoder) decodeRawValue(wireType WireType) (interface{}, error) {
 		fd := NewFixedDecoder(d)
 		return fd.DecodeFixed32()
 	default:
-		return nil, fmt.Errorf("unknown wire type: %d", wireType)
+		return nil, newFieldError("unknown wire type: %d", wireType)
 	}
 }
 
@@ -526,7 +525,7 @@ func (d *Decoder) skipField(wireType WireType) error {
 		return vd.SkipVarint()
 	case WireFixed64:
 		if d.pos+8 > len(d.buf) {
-			return fmt.Errorf("not enough data to skip fixed64")
+			return newFieldError("not enough data to skip fixed64")
 		}
 		d.pos += 8
 		return nil
@@ -535,12 +534,12 @@ func (d *Decoder) skipField(wireType WireType) error {
 		return bd.SkipBytes()
 	case WireFixed32:
 		if d.pos+4 > len(d.buf) {
-			return fmt.Errorf("not enough data to skip fixed32")
+			return newFieldError("not enough data to skip fixed32")
 		}
 		d.pos += 4
 		return nil
 	default:
-		return fmt.Errorf("unknown wire type: %d", wireType)
+		return newFieldError("unknown wire type: %d", wireType)
 	}
 }
 
@@ -608,6 +607,6 @@ func (d *Decoder) findEnumValue(enum *schema.Enum, enumIntVal int32) (string, er
 			return en.Name, nil
 		}
 	}
-	return "", fmt.Errorf("unknown enum field value %d received for enum field %#v", enumIntVal, enum)
+	return "", newFieldError("unknown enum field value %d received for enum field %#v", enumIntVal, enum)
 
 }

@@ -5,47 +5,75 @@ import (
 	"strings"
 )
 
-// FieldError represents an encoding error with a field path
+const (
+	encodingError = "encoding"
+	decodingError = "decoding"
+)
+
+// FieldError represents an encoding/decoding error with a field path.
 type FieldError struct {
-	FieldPath []string // Path to the field (e.g., ["field_args", "input", "target_location", "latitude"])
-	Err       error    // The underlying error
+	FieldPath  []string // e.g., ["field_args", "input", "target_location", "latitude"]
+	Err        error    // underlying error
+	IsDecoding bool     // true if decoding, false if encoding
 }
 
-// Error implements the error interface
+// Error implements the error interface.
 func (e *FieldError) Error() string {
 	if len(e.FieldPath) == 0 {
 		return e.Err.Error()
 	}
-	return fmt.Sprintf("encoding error at field path '%s': %v", strings.Join(e.FieldPath, "."), e.Err)
+
+	errType := encodingError
+	if e.IsDecoding {
+		errType = decodingError
+	}
+
+	return fmt.Sprintf("%s error at '%s': %v", errType, strings.Join(e.FieldPath, "."), e.Err)
 }
 
-// Unwrap returns the underlying error
+// Unwrap returns the underlying error.
 func (e *FieldError) Unwrap() error {
 	return e.Err
 }
 
-// wrapFieldError wraps an error with a field name, building the field path
-func wrapFieldError(err error, fieldName string) error {
+// Is implements errors.Is for compatibility.
+func (e *FieldError) Is(target error) bool {
+	_, ok := target.(*FieldError)
+	return ok
+}
+
+// wrapFieldErrorWithMode wraps an error with a field name and mode (encoding/decoding).
+func wrapFieldErrorWithMode(err error, fieldName string, isDecoding bool) error {
 	if err == nil {
 		return nil
 	}
 
-	// If it's already a FieldError, prepend the field name to the path
 	if fe, ok := err.(*FieldError); ok {
 		return &FieldError{
-			FieldPath: append([]string{fieldName}, fe.FieldPath...),
-			Err:       fe.Err,
+			FieldPath:  append([]string{fieldName}, fe.FieldPath...),
+			Err:        fe.Err,
+			IsDecoding: isDecoding || fe.IsDecoding,
 		}
 	}
 
-	// Otherwise, create a new FieldError with this field as the start of the path
 	return &FieldError{
-		FieldPath: []string{fieldName},
-		Err:       err,
+		FieldPath:  []string{fieldName},
+		Err:        err,
+		IsDecoding: isDecoding,
 	}
 }
 
-// newEncodingError creates a base encoding error (without field path)
-func newEncodingError(format string, args ...interface{}) error {
+// wrapEncodingFieldError wraps an encoding error.
+func wrapEncodingFieldError(err error, fieldName string) error {
+	return wrapFieldErrorWithMode(err, fieldName, false)
+}
+
+// wrapDecodingFieldError wraps a decoding error.
+func wrapDecodingFieldError(err error, fieldName string) error {
+	return wrapFieldErrorWithMode(err, fieldName, true)
+}
+
+// newFieldError creates a formatted base error.
+func newFieldError(format string, args ...interface{}) error {
 	return fmt.Errorf(format, args...)
 }
