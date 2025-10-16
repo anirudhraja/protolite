@@ -30,12 +30,8 @@ func TestProtolite_Parse(t *testing.T) {
 		// Field tag for field 1, wire type varint (0)
 		ve := wire.NewVarintEncoder(encoder)
 		tag := wire.MakeTag(wire.FieldNumber(1), wire.WireVarint)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			t.Fatalf("Failed to encode tag: %v", err)
-		}
-		if err := ve.EncodeVarint(42); err != nil {
-			t.Fatalf("Failed to encode value: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
+		ve.EncodeVarint(42)
 
 		result, err := proto.Parse(encoder.Bytes())
 		if err != nil {
@@ -62,21 +58,13 @@ func TestProtolite_Parse(t *testing.T) {
 
 		// Field 1: varint 123
 		tag1 := wire.MakeTag(wire.FieldNumber(1), wire.WireVarint)
-		if err := ve.EncodeVarint(uint64(tag1)); err != nil {
-			t.Fatalf("Failed to encode tag1: %v", err)
-		}
-		if err := ve.EncodeVarint(123); err != nil {
-			t.Fatalf("Failed to encode value1: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag1))
+		ve.EncodeVarint(123)
 
 		// Field 2: string "hello"
 		tag2 := wire.MakeTag(wire.FieldNumber(2), wire.WireBytes)
-		if err := ve.EncodeVarint(uint64(tag2)); err != nil {
-			t.Fatalf("Failed to encode tag2: %v", err)
-		}
-		if err := be.EncodeString("hello"); err != nil {
-			t.Fatalf("Failed to encode string: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag2))
+		be.EncodeString("hello")
 
 		result, err := proto.Parse(encoder.Bytes())
 		if err != nil {

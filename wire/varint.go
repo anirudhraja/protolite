@@ -144,56 +144,56 @@ func (vd *VarintDecoder) SkipVarint() error {
 // ENCODER METHODS
 
 // EncodeVarint encodes a uint64 as varint
-func (ve *VarintEncoder) EncodeVarint(v uint64) error {
+func (ve *VarintEncoder) EncodeVarint(v uint64) {
 	for v >= 0x80 {
 		ve.encoder.buf = append(ve.encoder.buf, byte(v)|0x80)
 		v >>= 7
 	}
 	ve.encoder.buf = append(ve.encoder.buf, byte(v))
-	return nil
 }
 
 // EncodeInt32 encodes an int32 as varint
-func (ve *VarintEncoder) EncodeInt32(v int32) error {
-	return ve.EncodeVarint(uint64(v))
+func (ve *VarintEncoder) EncodeInt32(v int32) {
+	ve.EncodeVarint(uint64(v))
 }
 
 // EncodeInt64 encodes an int64 as varint
-func (ve *VarintEncoder) EncodeInt64(v int64) error {
-	return ve.EncodeVarint(uint64(v))
+func (ve *VarintEncoder) EncodeInt64(v int64) {
+	ve.EncodeVarint(uint64(v))
 }
 
 // EncodeUint32 encodes a uint32 as varint
-func (ve *VarintEncoder) EncodeUint32(v uint32) error {
-	return ve.EncodeVarint(uint64(v))
+func (ve *VarintEncoder) EncodeUint32(v uint32) {
+	ve.EncodeVarint(uint64(v))
 }
 
 // EncodeUint64 encodes a uint64 as varint
-func (ve *VarintEncoder) EncodeUint64(v uint64) error {
-	return ve.EncodeVarint(v)
+func (ve *VarintEncoder) EncodeUint64(v uint64) {
+	ve.EncodeVarint(v)
 }
 
 // EncodeSint32 encodes a signed int32 with zigzag encoding
-func (ve *VarintEncoder) EncodeSint32(v int32) error {
-	return ve.EncodeVarint(EncodeZigZag32(v))
+func (ve *VarintEncoder) EncodeSint32(v int32) {
+	ve.EncodeVarint(EncodeZigZag32(v))
 }
 
 // EncodeSint64 encodes a signed int64 with zigzag encoding
-func (ve *VarintEncoder) EncodeSint64(v int64) error {
-	return ve.EncodeVarint(EncodeZigZag64(v))
+func (ve *VarintEncoder) EncodeSint64(v int64) {
+	ve.EncodeVarint(EncodeZigZag64(v))
 }
 
 // EncodeBool encodes a bool as varint
-func (ve *VarintEncoder) EncodeBool(v bool) error {
+func (ve *VarintEncoder) EncodeBool(v bool) {
 	if v {
-		return ve.EncodeVarint(1)
+		ve.EncodeVarint(1)
+	} else {
+		ve.EncodeVarint(0)
 	}
-	return ve.EncodeVarint(0)
 }
 
 // EncodeEnum encodes an enum value as varint
-func (ve *VarintEncoder) EncodeEnum(v int32) error {
-	return ve.EncodeVarint(uint64(v))
+func (ve *VarintEncoder) EncodeEnum(v int32) {
+	ve.EncodeVarint(uint64(v))
 }
 
 // UTILITY FUNCTIONS
@@ -253,7 +253,7 @@ func (d *Decoder) DecodeVarint() (uint64, error) {
 }
 
 // EncodeVarint - convenience method for main encoder
-func (e *Encoder) EncodeVarint(v uint64) error {
+func (e *Encoder) EncodeVarint(v uint64) {
 	ve := NewVarintEncoder(e)
-	return ve.EncodeVarint(v)
+	ve.EncodeVarint(v)
 }

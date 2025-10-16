@@ -81,14 +81,14 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 			}
 		}
 		if field == nil {
-			return fmt.Errorf("missing union field in %s", msg.Name)
+			return newEncodingError("missing union field in %s", msg.Name)
 		}
 		messageData = map[string]interface{}{getFieldName(field): data}
 	} else {
 		// If it's a map, we need to encode it as a message
 		messageData, ok = data.(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("message value must be map[string]interface{} or []byte or []interface{}, got %T", data)
+			return newEncodingError("message value for field %s must be map[string]interface{}, got %T", msg.Name, data)
 		}
 	}
 	return me.encodeMessage(messageData, msg)
@@ -150,7 +150,7 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 		// Handle map fields specially
 		if field.Type.Kind == schema.KindMap {
 			if err := me.encodeMapField(messageEncoder, fieldValue, field); err != nil {
-				return fmt.Errorf("failed to encode map field %s: %v", fieldName, err)
+				return wrapFieldError(err, fieldName)
 			}
 			continue
 		}
@@ -158,7 +158,7 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 		// For repeated fields, encodeFieldValue handles the field tags
 		if field.Label == schema.LabelRepeated {
 			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
-				return fmt.Errorf("failed to encode field %s: %v", fieldName, err)
+				return wrapFieldError(err, fieldName)
 			}
 
 		} else {
@@ -166,13 +166,11 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 			ve := NewVarintEncoder(messageEncoder)
 			wireType := me.getWireType(&field.Type)
 			tag := MakeTag(FieldNumber(field.Number), wireType)
-			if err := ve.EncodeVarint(uint64(tag)); err != nil {
-				return fmt.Errorf("failed to encode field tag for %s: %v", fieldName, err)
-			}
+			ve.EncodeVarint(uint64(tag))
 
 			// Encode field value
 			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
-				return fmt.Errorf("failed to encode field %s: %v", fieldName, err)
+				return wrapFieldError(err, fieldName)
 			}
 		}
 	}
@@ -202,7 +200,7 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 	case schema.KindWrapper:
 		return me.encodeWrapperField(encoder, value, field.Type.WrapperType)
 	default:
-		return fmt.Errorf("unsupported field type: %s", field.Type.Kind)
+		return newEncodingError("unsupported field type: %s", field.Type.Kind)
 	}
 }
 
@@ -267,7 +265,7 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 				slice[i] = val
 			}
 		default:
-			return fmt.Errorf("repeated field value must be a slice, got %T", value)
+			return newEncodingError("repeated field value must be a slice, got %T", value)
 		}
 	}
 	if field.JSONString {
@@ -294,13 +292,9 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 				wireType = WireBytes
 			}
 			tag := MakeTag(FieldNumber(field.Number), wireType)
-			if err := ve.EncodeVarint(uint64(tag)); err != nil {
-				return fmt.Errorf("failed to encode repeated field tag: %v", err)
-			}
+			ve.EncodeVarint(uint64(tag))
 			if packed {
-				if err := ve.EncodeInt32(int32(len(slice))); err != nil {
-					return fmt.Errorf("failed to encode length of field: %v", err)
-				}
+				ve.EncodeInt32(int32(len(slice)))
 			}
 		}
 
@@ -308,22 +302,22 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 		switch field.Type.Kind {
 		case schema.KindPrimitive:
 			if err := me.encodePrimitiveField(encoder, element, field.Type.PrimitiveType); err != nil {
-				return fmt.Errorf("failed to encode repeated primitive element: %v", err)
+				return err
 			}
 		case schema.KindMessage:
 			if err := me.encodeMessageField(encoder, element, field.Type.MessageType); err != nil {
-				return fmt.Errorf("failed to encode repeated message element: %v", err)
+				return err
 			}
 		case schema.KindEnum:
 			if err := me.encodeEnumField(encoder, element, field.Type); err != nil {
-				return fmt.Errorf("failed to encode repeated enum element: %v", err)
+				return err
 			}
 		case schema.KindWrapper:
 			if err := me.encodeWrapperField(encoder, element, field.Type.WrapperType); err != nil {
-				return fmt.Errorf("failed to encode repeated wrapper element: %v", err)
+				return err
 			}
 		default:
-			return fmt.Errorf("unsupported repeated field type: %s", field.Type.Kind)
+			return newEncodingError("unsupported repeated field type: %s", field.Type.Kind)
 		}
 	}
 
@@ -336,27 +330,30 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 	case schema.TypeString:
 		v, ok := value.(string)
 		if !ok {
-			return fmt.Errorf("expected string, got %T", value)
+			return newEncodingError("expected string, got %T", value)
 		}
-		return NewBytesEncoder(encoder).EncodeString(v)
+		NewBytesEncoder(encoder).EncodeString(v)
+		return nil
 	case schema.TypeBytes:
 		v, ok := value.([]byte)
 		if !ok {
-			return fmt.Errorf("expected []byte, got %T", value)
+			return newEncodingError("expected []byte, got %T", value)
 		}
-		return NewBytesEncoder(encoder).EncodeBytes(v)
+		NewBytesEncoder(encoder).EncodeBytes(v)
+		return nil
 	case schema.TypeInt32:
 		v, err := convertToInt32(value)
 		if err != nil {
 			return err
 		}
-		return NewVarintEncoder(encoder).EncodeInt32(v)
+		NewVarintEncoder(encoder).EncodeInt32(v)
+		return nil
 	case schema.TypeInt64:
 		v, ok := value.(int64)
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected int64, got %T", value)
+				return newEncodingError("expected int64, got %T", value)
 			}
 			val, err := jsonVal.Int64()
 			if err != nil {
@@ -364,13 +361,14 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 			}
 			v = val
 		}
-		return NewVarintEncoder(encoder).EncodeInt64(v)
+		NewVarintEncoder(encoder).EncodeInt64(v)
+		return nil
 	case schema.TypeUint32:
 		v, ok := value.(uint32)
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected uint32, got %T", value)
+				return newEncodingError("expected uint32, got %T", value)
 			}
 			val, err := strconv.ParseUint(jsonVal.String(), 10, 32)
 			if err != nil {
@@ -378,13 +376,14 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 			}
 			v = uint32(val)
 		}
-		return NewVarintEncoder(encoder).EncodeUint32(v)
+		NewVarintEncoder(encoder).EncodeUint32(v)
+		return nil
 	case schema.TypeUint64:
 		v, ok := value.(uint64)
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected uint64, got %T", value)
+				return newEncodingError("expected uint64, got %T", value)
 			}
 			val, err := strconv.ParseUint(jsonVal.String(), 10, 64)
 			if err != nil {
@@ -392,19 +391,21 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 			}
 			v = uint64(val)
 		}
-		return NewVarintEncoder(encoder).EncodeUint64(v)
+		NewVarintEncoder(encoder).EncodeUint64(v)
+		return nil
 	case schema.TypeBool:
 		v, ok := value.(bool)
 		if !ok {
-			return fmt.Errorf("expected bool, got %T", value)
+			return newEncodingError("expected bool, got %T", value)
 		}
-		return NewVarintEncoder(encoder).EncodeBool(v)
+		NewVarintEncoder(encoder).EncodeBool(v)
+		return nil
 	case schema.TypeFloat:
 		v, ok := value.(float32)
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected float32, got %T", value)
+				return newEncodingError("expected float32, got %T", value)
 			}
 			val, err := strconv.ParseFloat(jsonVal.String(), 32)
 			if err != nil {
@@ -418,7 +419,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected float64, got %T", value)
+				return newEncodingError("expected float64, got %T", value)
 			}
 			val, err := strconv.ParseFloat(jsonVal.String(), 64)
 			if err != nil {
@@ -432,7 +433,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected uint32, got %T", value)
+				return newEncodingError("expected uint32, got %T", value)
 			}
 			val, err := strconv.ParseUint(jsonVal.String(), 10, 32)
 			if err != nil {
@@ -446,7 +447,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected uint64, got %T", value)
+				return newEncodingError("expected uint64, got %T", value)
 			}
 			val, err := strconv.ParseUint(jsonVal.String(), 10, 64)
 			if err != nil {
@@ -460,7 +461,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected int32, got %T", value)
+				return newEncodingError("expected int32, got %T", value)
 			}
 			val, err := strconv.Atoi(jsonVal.String())
 			if err != nil {
@@ -474,7 +475,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected int64, got %T", value)
+				return newEncodingError("expected int64, got %T", value)
 			}
 			val, err := jsonVal.Int64()
 			if err != nil {
@@ -488,7 +489,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected int32, got %T", value)
+				return newEncodingError("expected int32, got %T", value)
 			}
 			val, err := strconv.Atoi(jsonVal.String())
 			if err != nil {
@@ -502,7 +503,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return fmt.Errorf("expected int64, got %T", value)
+				return newEncodingError("expected int64, got %T", value)
 			}
 			val, err := jsonVal.Int64()
 			if err != nil {
@@ -512,7 +513,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		}
 		return NewFixedEncoder(encoder).EncodeSfixed64(v)
 	default:
-		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
+		return newEncodingError("unsupported primitive type: %s", primitiveType)
 	}
 }
 
@@ -521,17 +522,18 @@ func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}
 	// If it's already bytes, encode directly
 	if messageBytes, ok := value.([]byte); ok {
 		be := NewBytesEncoder(encoder)
-		return be.EncodeBytes(messageBytes)
+		be.EncodeBytes(messageBytes)
+		return nil
 	}
 
 	// Look up the message schema
 	if me.encoder.registry == nil {
-		return fmt.Errorf("registry is required to encode message fields")
+		return newEncodingError("registry is required to encode message fields")
 	}
 
 	messageSchema, err := me.encoder.registry.GetMessage(messageTypeName)
 	if err != nil {
-		return fmt.Errorf("failed to get message schema for %s: %v", messageTypeName, err)
+		return newEncodingError("failed to get message schema for %s: %v", messageTypeName, err)
 	}
 
 	// Create a temporary encoder for the nested message
@@ -540,12 +542,13 @@ func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}
 
 	nestedMessageEncoder := NewMessageEncoder(nestedEncoder)
 	if err := nestedMessageEncoder.EncodeMessage(value, messageSchema); err != nil {
-		return fmt.Errorf("failed to encode nested message: %v", err)
+		return err
 	}
 
 	// Encode the nested message bytes
 	be := NewBytesEncoder(encoder)
-	return be.EncodeBytes(nestedEncoder.Bytes())
+	be.EncodeBytes(nestedEncoder.Bytes())
+	return nil
 }
 
 // encodeEnumField encodes an enum field
@@ -555,21 +558,22 @@ func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}, f
 		// check if the enum value is a JSON Number
 		enumValueInJsonNumber, isJsonNumber := value.(json.Number)
 		if !isJsonNumber {
-			return fmt.Errorf("enum value must be string for %s field", fieldType.EnumType)
+			return newEncodingError("enum value must be string for %s field", fieldType.EnumType)
 		}
 		enumValue = enumValueInJsonNumber.String()
 	}
 	enum, err := me.encoder.registry.GetEnum(fieldType.EnumType)
 	if err != nil {
-		return fmt.Errorf("unknown enum %s received for enum , with value %v", fieldType.EnumType, value)
+		return newEncodingError("unknown enum %s received for enum, with value %v", fieldType.EnumType, value)
 	}
 	for _, en := range enum.Values {
 		if en.Name == enumValue || en.JsonName == enumValue {
 			ve := NewVarintEncoder(encoder)
-			return ve.EncodeEnum(en.Number)
+			ve.EncodeEnum(en.Number)
+			return nil
 		}
 	}
-	return fmt.Errorf("cannot find field value %s in the enum %v", enumValue, enum.Values)
+	return newEncodingError("cannot find field value %s in the enum %v", enumValue, enum.Values)
 
 }
 
@@ -594,7 +598,7 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 			if actualValue, exists := mapVal["value"]; exists {
 				return actualValue, nil
 			}
-			return nil, fmt.Errorf("wrapper map must contain 'value' field")
+			return nil, newEncodingError("wrapper map must contain 'value' field")
 		}
 		return v, nil
 	}
@@ -613,18 +617,16 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		case json.Number:
 			val, err = v.Float64()
 			if err != nil {
-				return fmt.Errorf("invalid float64: %v", err)
+				return newEncodingError("invalid float64: %v", err)
 			}
 		default:
-			return fmt.Errorf("unexpected type for float64: %T", actualValue)
+			return newEncodingError("unexpected type for float64: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireFixed64)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
 		fe := NewFixedEncoder(wrapperEncoder)
 		if err := fe.EncodeFloat64(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
+			return err
 		}
 
 	case schema.WrapperFloatValue:
@@ -639,19 +641,17 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		case json.Number:
 			f64, err := strconv.ParseFloat(v.String(), 32)
 			if err != nil {
-				return fmt.Errorf("invalid float32: %v", err)
+				return newEncodingError("invalid float32: %v", err)
 			}
 			val = float32(f64)
 		default:
-			return fmt.Errorf("unexpected type for float32: %T", actualValue)
+			return newEncodingError("unexpected type for float32: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireFixed32)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
 		fe := NewFixedEncoder(wrapperEncoder)
 		if err := fe.EncodeFloat32(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
+			return err
 		}
 
 	case schema.WrapperInt64Value:
@@ -666,18 +666,14 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		case json.Number:
 			val, err = v.Int64()
 			if err != nil {
-				return fmt.Errorf("invalid int64: %v", err)
+				return newEncodingError("invalid int64: %v", err)
 			}
 		default:
-			return fmt.Errorf("unexpected type for int64: %T", actualValue)
+			return newEncodingError("unexpected type for int64: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
-		if err := ve.EncodeInt64(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
+		ve.EncodeInt64(val)
 
 	case schema.WrapperUInt64Value:
 		actualValue, err := extractWrapperValue(value)
@@ -691,18 +687,14 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		case json.Number:
 			val, err = strconv.ParseUint(v.String(), 10, 64)
 			if err != nil {
-				return fmt.Errorf("invalid uint64: %v", err)
+				return newEncodingError("invalid uint64: %v", err)
 			}
 		default:
-			return fmt.Errorf("unexpected type for uint64: %T", actualValue)
+			return newEncodingError("unexpected type for uint64: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
-		if err := ve.EncodeUint64(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
+		ve.EncodeUint64(val)
 
 	case schema.WrapperInt32Value:
 		actualValue, err := extractWrapperValue(value)
@@ -715,12 +707,8 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 			return err
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
-		if err := ve.EncodeInt32(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
+		ve.EncodeInt32(val)
 
 	case schema.WrapperUInt32Value:
 		actualValue, err := extractWrapperValue(value)
@@ -735,19 +723,15 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 			var u64 uint64
 			u64, err = strconv.ParseUint(v.String(), 10, 32)
 			if err != nil {
-				return fmt.Errorf("invalid uint32: %v", err)
+				return newEncodingError("invalid uint32: %v", err)
 			}
 			val = uint32(u64)
 		default:
-			return fmt.Errorf("unexpected type for uint32: %T", actualValue)
+			return newEncodingError("unexpected type for uint32: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
-		if err := ve.EncodeUint32(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
+		ve.EncodeUint32(val)
 
 	case schema.WrapperBoolValue:
 		actualValue, err := extractWrapperValue(value)
@@ -756,15 +740,11 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		}
 		val, ok := actualValue.(bool)
 		if !ok {
-			return fmt.Errorf("unexpected type for bool: %T", actualValue)
+			return newEncodingError("unexpected type for bool: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
-		if err := ve.EncodeBool(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
+		ve.EncodeBool(val)
 
 	case schema.WrapperStringValue:
 		actualValue, err := extractWrapperValue(value)
@@ -773,16 +753,12 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		}
 		val, ok := actualValue.(string)
 		if !ok {
-			return fmt.Errorf("unexpected type for string: %T", actualValue)
+			return newEncodingError("unexpected type for string: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireBytes)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
 		be := NewBytesEncoder(wrapperEncoder)
-		if err := be.EncodeString(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
-		}
+		be.EncodeString(val)
 
 	case schema.WrapperBytesValue:
 		actualValue, err := extractWrapperValue(value)
@@ -791,24 +767,21 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		}
 		val, ok := actualValue.([]byte)
 		if !ok {
-			return fmt.Errorf("unexpected type for bytes: %T", actualValue)
+			return newEncodingError("unexpected type for bytes: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireBytes)
-		if err := ve.EncodeVarint(uint64(tag)); err != nil {
-			return fmt.Errorf("failed to encode wrapper field tag: %v", err)
-		}
+		ve.EncodeVarint(uint64(tag))
 		be := NewBytesEncoder(wrapperEncoder)
-		if err := be.EncodeBytes(val); err != nil {
-			return fmt.Errorf("failed to encode wrapper value: %v", err)
-		}
+		be.EncodeBytes(val)
 
 	default:
-		return fmt.Errorf("unsupported wrapper type: %s", wrapperType)
+		return newEncodingError("unsupported wrapper type: %s", wrapperType)
 	}
 
 	// Now encode the wrapper message bytes as a length-delimited field
 	be := NewBytesEncoder(encoder)
-	return be.EncodeBytes(wrapperEncoder.Bytes())
+	be.EncodeBytes(wrapperEncoder.Bytes())
+	return nil
 }
 
 func convertToInt32(value interface{}) (int32, error) {
@@ -817,20 +790,20 @@ func convertToInt32(value interface{}) (int32, error) {
 		return v, nil
 	case int64:
 		if v < math.MinInt32 || v > math.MaxInt32 {
-			return 0, fmt.Errorf("value %d out of int32 range", v)
+			return 0, newEncodingError("value %d out of int32 range", v)
 		}
 		return int32(v), nil
 	case json.Number:
 		i64, err := v.Int64()
 		if err != nil {
-			return 0, fmt.Errorf("invalid int32: %v", err)
+			return 0, newEncodingError("invalid int32: %v", err)
 		}
 		if i64 < math.MinInt32 || i64 > math.MaxInt32 {
-			return 0, fmt.Errorf("value %d out of int32 range", i64)
+			return 0, newEncodingError("value %d out of int32 range", i64)
 		}
 		return int32(i64), nil
 	default:
-		return 0, fmt.Errorf("unexpected type for int32: %T", value)
+		return 0, newEncodingError("unexpected type for int32: %T", value)
 	}
 }
 
@@ -851,7 +824,7 @@ func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, fi
 					// Get the message schema
 					messageSchema, err := me.encoder.registry.GetMessage(field.Type.MapValue.MessageType)
 					if err != nil {
-						return fmt.Errorf("failed to get message schema for %s: %v", field.Type.MapValue.MessageType, err)
+						return newEncodingError("failed to get message schema for %s: %v", field.Type.MapValue.MessageType, err)
 					}
 
 					// Encode the message
@@ -859,7 +832,7 @@ func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, fi
 					nestedEncoder.registry = me.encoder.registry
 					nestedMessageEncoder := NewMessageEncoder(nestedEncoder)
 					if err := nestedMessageEncoder.EncodeMessage(messageData, messageSchema); err != nil {
-						return fmt.Errorf("failed to encode nested message: %v", err)
+						return err
 					}
 
 					mapData[k] = nestedEncoder.Bytes()
@@ -891,7 +864,7 @@ func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, fi
 			mapData[k] = val
 		}
 	default:
-		return fmt.Errorf("unsupported map type: %T", value)
+		return newEncodingError("unsupported map type: %T", value)
 	}
 
 	// Use the map encoder to encode the entire map with field tags

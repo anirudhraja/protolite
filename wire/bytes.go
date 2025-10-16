@@ -99,21 +99,17 @@ func (bd *BytesDecoder) SkipBytes() error {
 // ENCODER METHODS
 
 // EncodeBytes encodes a byte array as length-delimited
-func (be *BytesEncoder) EncodeBytes(data []byte) error {
+func (be *BytesEncoder) EncodeBytes(data []byte) {
 	// First encode the length as a varint
 	ve := NewVarintEncoder(be.encoder)
-	if err := ve.EncodeVarint(uint64(len(data))); err != nil {
-		return fmt.Errorf("failed to encode bytes length: %v", err)
-	}
-
+	ve.EncodeVarint(uint64(len(data)))
 	// Then append the data
 	be.encoder.buf = append(be.encoder.buf, data...)
-	return nil
 }
 
 // EncodeString encodes a string as length-delimited bytes
-func (be *BytesEncoder) EncodeString(s string) error {
-	return be.EncodeBytes([]byte(s))
+func (be *BytesEncoder) EncodeString(s string) {
+	be.EncodeBytes([]byte(s))
 }
 
 // UTILITY FUNCTIONS
@@ -137,13 +133,13 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 }
 
 // EncodeBytes - convenience method for main encoder
-func (e *Encoder) EncodeBytes(data []byte) error {
+func (e *Encoder) EncodeBytes(data []byte) {
 	be := NewBytesEncoder(e)
-	return be.EncodeBytes(data)
+	be.EncodeBytes(data)
 }
 
 // EncodeString - convenience method for main encoder
-func (e *Encoder) EncodeString(s string) error {
+func (e *Encoder) EncodeString(s string) {
 	be := NewBytesEncoder(e)
-	return be.EncodeString(s)
+	 be.EncodeString(s)
 }
