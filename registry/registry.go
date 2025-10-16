@@ -181,19 +181,19 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 		case *protoparserparser.Message:
 			msg, err := r.processMessage(b, allResolvedEntities, protoFile.Package)
 			if err != nil {
-				return fmt.Errorf("Unable to process message: %v", b.MessageName)
+				return fmt.Errorf("Message %s processing failed with err: %v", b.MessageName,err)
 			}
 			protoFile.Messages = append(protoFile.Messages, msg)
 		case *protoparserparser.Enum:
 			enum, err := r.processEnum(b)
 			if err != nil {
-				return fmt.Errorf("Unable to process enum: %v", b.EnumName)
+				return fmt.Errorf("Enum %s processing failed with err: %v", b.EnumName,err)
 			}
 			protoFile.Enums = append(protoFile.Enums, enum)
 		case *protoparserparser.Service:
 			service, err := r.processService(b)
 			if err != nil {
-				return fmt.Errorf("Unable to process service: %v", b.ServiceName)
+				return fmt.Errorf("Service %s processing failed with err: %v", b.ServiceName,err)
 			}
 			protoFile.Services = append(protoFile.Services, service)
 
