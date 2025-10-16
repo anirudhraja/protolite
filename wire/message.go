@@ -780,7 +780,8 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 
 	// Now encode the wrapper message bytes as a length-delimited field
 	be := NewBytesEncoder(encoder)
-	return be.EncodeBytes(wrapperEncoder.Bytes())
+	be.EncodeBytes(wrapperEncoder.Bytes())
+	return nil
 }
 
 func convertToInt32(value interface{}) (int32, error) {
@@ -789,20 +790,20 @@ func convertToInt32(value interface{}) (int32, error) {
 		return v, nil
 	case int64:
 		if v < math.MinInt32 || v > math.MaxInt32 {
-			return 0, fmt.Errorf("value %d out of int32 range", v)
+			return 0, newEncodingError("value %d out of int32 range", v)
 		}
 		return int32(v), nil
 	case json.Number:
 		i64, err := v.Int64()
 		if err != nil {
-			return 0, fmt.Errorf("invalid int32: %v", err)
+			return 0, newEncodingError("invalid int32: %v", err)
 		}
 		if i64 < math.MinInt32 || i64 > math.MaxInt32 {
-			return 0, fmt.Errorf("value %d out of int32 range", i64)
+			return 0, newEncodingError("value %d out of int32 range", i64)
 		}
 		return int32(i64), nil
 	default:
-		return 0, fmt.Errorf("unexpected type for int32: %T", value)
+		return 0, newEncodingError("unexpected type for int32: %T", value)
 	}
 }
 
