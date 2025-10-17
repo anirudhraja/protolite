@@ -123,10 +123,6 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 	}
 	// if its primitive type , add all default values to the message
 	for _, field := range msg.Fields {
-		if field.Label == schema.LabelRepeated {
-			continue
-		}
-
 		fieldName := getFieldName(field)
 		// add default values only when its not present in result
 		if _, ok := result[fieldName]; !ok {
