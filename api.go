@@ -102,7 +102,11 @@ func (p *protolite) MarshalWithSchema(data map[string]interface{}, messageName s
 		return nil, fmt.Errorf("message schema not found: %v", err)
 	}
 
-	return wire.EncodeMessage(data, message, p.registry)
+	protoBytes,err := wire.EncodeMessage(data, message, p.registry)
+	if err != nil {
+		return nil, fmt.Errorf("encoding failed: %w", err)
+	}
+	return protoBytes,err
 }
 
 // UnmarshalWithSchema unmarshals data using a specific message schema
@@ -114,7 +118,7 @@ func (p *protolite) UnmarshalWithSchema(data []byte, messageName string) (map[st
 
 	decodedMessage, err := wire.DecodeMessage(data, message, p.registry)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decoding failed: %w", err)
 	}
 	result, ok := decodedMessage.(map[string]interface{})
 	if !ok {

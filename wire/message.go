@@ -38,7 +38,8 @@ func (md *MessageDecoder) DecodeMessage(messageType string) (interface{}, error)
 	bd := NewBytesDecoder(md.decoder)
 	messageBytes, err := bd.DecodeBytes()
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode message bytes: %v", err)
+		// Return error directly to avoid repetitive wrapping in recursive calls
+		return nil, err
 	}
 
 	if md.decoder.registry == nil {
@@ -81,14 +82,14 @@ func (me *MessageEncoder) EncodeMessage(data interface{}, msg *schema.Message) e
 			}
 		}
 		if field == nil {
-			return newEncodingError("missing union field in %s", msg.Name)
+			return fmt.Errorf("missing union field in %s", msg.Name)
 		}
 		messageData = map[string]interface{}{getFieldName(field): data}
 	} else {
 		// If it's a map, we need to encode it as a message
 		messageData, ok = data.(map[string]interface{})
 		if !ok {
-			return newEncodingError("message value for field %s must be map[string]interface{}, got %T", msg.Name, data)
+			return fmt.Errorf("message value for field %s must be map[string]interface{}, got %T", msg.Name, data)
 		}
 	}
 	return me.encodeMessage(messageData, msg)
@@ -150,7 +151,7 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 		// Handle map fields specially
 		if field.Type.Kind == schema.KindMap {
 			if err := me.encodeMapField(messageEncoder, fieldValue, field); err != nil {
-				return wrapFieldError(err, fieldName)
+				return wrapWithField(err, fieldName)
 			}
 			continue
 		}
@@ -158,7 +159,7 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 		// For repeated fields, encodeFieldValue handles the field tags
 		if field.Label == schema.LabelRepeated {
 			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
-				return wrapFieldError(err, fieldName)
+				return wrapWithField(err, fieldName)
 			}
 
 		} else {
@@ -170,7 +171,7 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 
 			// Encode field value
 			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
-				return wrapFieldError(err, fieldName)
+				return wrapWithField(err, fieldName)
 			}
 		}
 	}
@@ -200,7 +201,7 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 	case schema.KindWrapper:
 		return me.encodeWrapperField(encoder, value, field.Type.WrapperType)
 	default:
-		return newEncodingError("unsupported field type: %s", field.Type.Kind)
+		return fmt.Errorf("unsupported field type: %s", field.Type.Kind)
 	}
 }
 
@@ -265,7 +266,7 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 				slice[i] = val
 			}
 		default:
-			return newEncodingError("repeated field value must be a slice, got %T", value)
+			return fmt.Errorf("repeated field value must be a slice, got %T", value)
 		}
 	}
 	if field.JSONString {
@@ -317,7 +318,7 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 				return err
 			}
 		default:
-			return newEncodingError("unsupported repeated field type: %s", field.Type.Kind)
+			return fmt.Errorf("unsupported repeated field type: %s", field.Type.Kind)
 		}
 	}
 
@@ -330,14 +331,14 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 	case schema.TypeString:
 		v, ok := value.(string)
 		if !ok {
-			return newEncodingError("expected string, got %T", value)
+			return fmt.Errorf("expected string, got %T", value)
 		}
 		NewBytesEncoder(encoder).EncodeString(v)
 		return nil
 	case schema.TypeBytes:
 		v, ok := value.([]byte)
 		if !ok {
-			return newEncodingError("expected []byte, got %T", value)
+			return fmt.Errorf("expected []byte, got %T", value)
 		}
 		NewBytesEncoder(encoder).EncodeBytes(v)
 		return nil
@@ -353,7 +354,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected int64, got %T", value)
+				return fmt.Errorf("expected int64, got %T", value)
 			}
 			val, err := jsonVal.Int64()
 			if err != nil {
@@ -368,7 +369,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected uint32, got %T", value)
+				return fmt.Errorf("expected uint32, got %T", value)
 			}
 			val, err := strconv.ParseUint(jsonVal.String(), 10, 32)
 			if err != nil {
@@ -383,7 +384,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected uint64, got %T", value)
+				return fmt.Errorf("expected uint64, got %T", value)
 			}
 			val, err := strconv.ParseUint(jsonVal.String(), 10, 64)
 			if err != nil {
@@ -396,7 +397,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 	case schema.TypeBool:
 		v, ok := value.(bool)
 		if !ok {
-			return newEncodingError("expected bool, got %T", value)
+			return fmt.Errorf("expected bool, got %T", value)
 		}
 		NewVarintEncoder(encoder).EncodeBool(v)
 		return nil
@@ -405,7 +406,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected float32, got %T", value)
+				return fmt.Errorf("expected float32, got %T", value)
 			}
 			val, err := strconv.ParseFloat(jsonVal.String(), 32)
 			if err != nil {
@@ -419,7 +420,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected float64, got %T", value)
+				return fmt.Errorf("expected float64, got %T", value)
 			}
 			val, err := strconv.ParseFloat(jsonVal.String(), 64)
 			if err != nil {
@@ -433,7 +434,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected uint32, got %T", value)
+				return fmt.Errorf("expected uint32, got %T", value)
 			}
 			val, err := strconv.ParseUint(jsonVal.String(), 10, 32)
 			if err != nil {
@@ -447,7 +448,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected uint64, got %T", value)
+				return fmt.Errorf("expected uint64, got %T", value)
 			}
 			val, err := strconv.ParseUint(jsonVal.String(), 10, 64)
 			if err != nil {
@@ -461,7 +462,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected int32, got %T", value)
+				return fmt.Errorf("expected int32, got %T", value)
 			}
 			val, err := strconv.Atoi(jsonVal.String())
 			if err != nil {
@@ -475,7 +476,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected int64, got %T", value)
+				return fmt.Errorf("expected int64, got %T", value)
 			}
 			val, err := jsonVal.Int64()
 			if err != nil {
@@ -489,7 +490,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected int32, got %T", value)
+				return fmt.Errorf("expected int32, got %T", value)
 			}
 			val, err := strconv.Atoi(jsonVal.String())
 			if err != nil {
@@ -503,7 +504,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		if !ok {
 			jsonVal, ok := value.(json.Number)
 			if !ok {
-				return newEncodingError("expected int64, got %T", value)
+				return fmt.Errorf("expected int64, got %T", value)
 			}
 			val, err := jsonVal.Int64()
 			if err != nil {
@@ -513,7 +514,7 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 		}
 		return NewFixedEncoder(encoder).EncodeSfixed64(v)
 	default:
-		return newEncodingError("unsupported primitive type: %s", primitiveType)
+		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
 	}
 }
 
@@ -528,12 +529,12 @@ func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}
 
 	// Look up the message schema
 	if me.encoder.registry == nil {
-		return newEncodingError("registry is required to encode message fields")
+		return fmt.Errorf("registry is required to encode message fields")
 	}
 
 	messageSchema, err := me.encoder.registry.GetMessage(messageTypeName)
 	if err != nil {
-		return newEncodingError("failed to get message schema for %s: %v", messageTypeName, err)
+		return fmt.Errorf("failed to get message schema for %s: %v", messageTypeName, err)
 	}
 
 	// Create a temporary encoder for the nested message
@@ -558,13 +559,13 @@ func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}, f
 		// check if the enum value is a JSON Number
 		enumValueInJsonNumber, isJsonNumber := value.(json.Number)
 		if !isJsonNumber {
-			return newEncodingError("enum value must be string for %s field", fieldType.EnumType)
+			return fmt.Errorf("enum value must be string for %s field", fieldType.EnumType)
 		}
 		enumValue = enumValueInJsonNumber.String()
 	}
 	enum, err := me.encoder.registry.GetEnum(fieldType.EnumType)
 	if err != nil {
-		return newEncodingError("unknown enum %s received for enum, with value %v", fieldType.EnumType, value)
+		return fmt.Errorf("unknown enum %s received for enum, with value %v", fieldType.EnumType, value)
 	}
 	for _, en := range enum.Values {
 		if en.Name == enumValue || en.JsonName == enumValue {
@@ -573,7 +574,7 @@ func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}, f
 			return nil
 		}
 	}
-	return newEncodingError("cannot find field value %s in the enum %v", enumValue, enum.Values)
+	return fmt.Errorf("cannot find field value %s in the enum %v", enumValue, enum.Values)
 
 }
 
@@ -598,7 +599,7 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 			if actualValue, exists := mapVal["value"]; exists {
 				return actualValue, nil
 			}
-			return nil, newEncodingError("wrapper map must contain 'value' field")
+			return nil, fmt.Errorf("wrapper map must contain 'value' field")
 		}
 		return v, nil
 	}
@@ -617,10 +618,10 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		case json.Number:
 			val, err = v.Float64()
 			if err != nil {
-				return newEncodingError("invalid float64: %v", err)
+				return fmt.Errorf("invalid float64: %v", err)
 			}
 		default:
-			return newEncodingError("unexpected type for float64: %T", actualValue)
+			return fmt.Errorf("unexpected type for float64: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireFixed64)
 		ve.EncodeVarint(uint64(tag))
@@ -641,11 +642,11 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		case json.Number:
 			f64, err := strconv.ParseFloat(v.String(), 32)
 			if err != nil {
-				return newEncodingError("invalid float32: %v", err)
+				return fmt.Errorf("invalid float32: %v", err)
 			}
 			val = float32(f64)
 		default:
-			return newEncodingError("unexpected type for float32: %T", actualValue)
+			return fmt.Errorf("unexpected type for float32: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireFixed32)
 		ve.EncodeVarint(uint64(tag))
@@ -666,10 +667,10 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		case json.Number:
 			val, err = v.Int64()
 			if err != nil {
-				return newEncodingError("invalid int64: %v", err)
+				return fmt.Errorf("invalid int64: %v", err)
 			}
 		default:
-			return newEncodingError("unexpected type for int64: %T", actualValue)
+			return fmt.Errorf("unexpected type for int64: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
 		ve.EncodeVarint(uint64(tag))
@@ -687,10 +688,10 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		case json.Number:
 			val, err = strconv.ParseUint(v.String(), 10, 64)
 			if err != nil {
-				return newEncodingError("invalid uint64: %v", err)
+				return fmt.Errorf("invalid uint64: %v", err)
 			}
 		default:
-			return newEncodingError("unexpected type for uint64: %T", actualValue)
+			return fmt.Errorf("unexpected type for uint64: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
 		ve.EncodeVarint(uint64(tag))
@@ -723,11 +724,11 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 			var u64 uint64
 			u64, err = strconv.ParseUint(v.String(), 10, 32)
 			if err != nil {
-				return newEncodingError("invalid uint32: %v", err)
+				return fmt.Errorf("invalid uint32: %v", err)
 			}
 			val = uint32(u64)
 		default:
-			return newEncodingError("unexpected type for uint32: %T", actualValue)
+			return fmt.Errorf("unexpected type for uint32: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
 		ve.EncodeVarint(uint64(tag))
@@ -740,7 +741,7 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		}
 		val, ok := actualValue.(bool)
 		if !ok {
-			return newEncodingError("unexpected type for bool: %T", actualValue)
+			return fmt.Errorf("unexpected type for bool: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireVarint)
 		ve.EncodeVarint(uint64(tag))
@@ -753,7 +754,7 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		}
 		val, ok := actualValue.(string)
 		if !ok {
-			return newEncodingError("unexpected type for string: %T", actualValue)
+			return fmt.Errorf("unexpected type for string: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireBytes)
 		ve.EncodeVarint(uint64(tag))
@@ -767,7 +768,7 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		}
 		val, ok := actualValue.([]byte)
 		if !ok {
-			return newEncodingError("unexpected type for bytes: %T", actualValue)
+			return fmt.Errorf("unexpected type for bytes: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireBytes)
 		ve.EncodeVarint(uint64(tag))
@@ -775,7 +776,7 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 		be.EncodeBytes(val)
 
 	default:
-		return newEncodingError("unsupported wrapper type: %s", wrapperType)
+		return fmt.Errorf("unsupported wrapper type: %s", wrapperType)
 	}
 
 	// Now encode the wrapper message bytes as a length-delimited field
@@ -790,20 +791,20 @@ func convertToInt32(value interface{}) (int32, error) {
 		return v, nil
 	case int64:
 		if v < math.MinInt32 || v > math.MaxInt32 {
-			return 0, newEncodingError("value %d out of int32 range", v)
+			return 0, fmt.Errorf("value %d out of int32 range", v)
 		}
 		return int32(v), nil
 	case json.Number:
 		i64, err := v.Int64()
 		if err != nil {
-			return 0, newEncodingError("invalid int32: %v", err)
+			return 0, fmt.Errorf("invalid int32: %v", err)
 		}
 		if i64 < math.MinInt32 || i64 > math.MaxInt32 {
-			return 0, newEncodingError("value %d out of int32 range", i64)
+			return 0, fmt.Errorf("value %d out of int32 range", i64)
 		}
 		return int32(i64), nil
 	default:
-		return 0, newEncodingError("unexpected type for int32: %T", value)
+		return 0, fmt.Errorf("unexpected type for int32: %T", value)
 	}
 }
 
@@ -824,7 +825,7 @@ func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, fi
 					// Get the message schema
 					messageSchema, err := me.encoder.registry.GetMessage(field.Type.MapValue.MessageType)
 					if err != nil {
-						return newEncodingError("failed to get message schema for %s: %v", field.Type.MapValue.MessageType, err)
+						return fmt.Errorf("failed to get message schema for %s: %v", field.Type.MapValue.MessageType, err)
 					}
 
 					// Encode the message
@@ -864,7 +865,7 @@ func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, fi
 			mapData[k] = val
 		}
 	default:
-		return newEncodingError("unsupported map type: %T", value)
+		return fmt.Errorf("unsupported map type: %T", value)
 	}
 
 	// Use the map encoder to encode the entire map with field tags
@@ -916,18 +917,4 @@ func (me *MessageEncoder) findFieldByName(msg *schema.Message, fieldName string)
 		}
 	}
 	return nil
-}
-
-// Convenience methods for direct access (main maintains backward compatibility)
-
-// DecodeMessage - convenience method for main decoder
-func (d *Decoder) DecodeMessage(messageType string) (interface{}, error) {
-	md := NewMessageDecoder(d)
-	return md.DecodeMessage(messageType)
-}
-
-// EncodeMessage - convenience method for main encoder
-func (e *Encoder) EncodeMessage(data map[string]interface{}, msg *schema.Message) error {
-	me := NewMessageEncoder(e)
-	return me.EncodeMessage(data, msg)
 }

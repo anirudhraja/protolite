@@ -52,7 +52,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		// Read field tag using varint decoder
 		tag, err := d.DecodeVarint()
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode message %s: %v", msg.Name, err)
+			return nil, wrapWithField(err, msg.Name)
 		}
 
 		fieldNumber, wireType := ParseTag(Tag(tag))
@@ -80,7 +80,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		if field == nil {
 			err := d.skipField(wireType)
 			if err != nil {
-				return nil, fmt.Errorf("failed to decode message %s: %v", msg.Name, err)
+				return nil, wrapWithField(err, msg.Name)
 			}
 			continue
 		}
@@ -88,7 +88,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		// Decode using appropriate decoder
 		value, isPackedType, err := d.DecodeTypedField(field, wireType)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode field %s: %v", field.Name, err)
+			return nil, wrapWithField(err, fieldName)
 		}
 
 		// Handle different field types
