@@ -207,10 +207,6 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 
 // encodeRepeatedField encodes a repeated field
 func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{}, field *schema.Field) error {
-	if value == nil {
-		return nil
-	}
-
 	slice, ok := value.([]interface{})
 	if !ok {
 		// Try to convert different slice types to []interface{}
