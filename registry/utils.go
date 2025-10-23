@@ -16,6 +16,7 @@ const (
 	optionsIsListWrapper = "ListWrapper"
 	optionWrapper        = "wrapper"
 	optionShowNull       = "show_null"
+	optionTrackNull      = "track_null"
 )
 
 // getAllProtoInfo uses DFS to fetch all the files from all directories passed and stores relevant proto files

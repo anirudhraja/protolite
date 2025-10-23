@@ -121,30 +121,55 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 	for fieldName, repeatedData := range repeatedCollector {
 		result[fieldName] = repeatedData
 	}
+
 	// if its primitive type , add all default values to the message
-	for _, field := range msg.Fields {
-		if field.Label == schema.LabelRepeated {
-			continue
+
+	if msg.TrackNull {
+		wrapVal := result[schema.NullTrackerFieldName]
+		if wrapValMap, ok := wrapVal.(map[string]interface{}); ok {
+			if nullTracker, ok := wrapValMap[schema.NullTrackerWrapperInternalFieldName].(map[string]interface{}); ok && nullTracker["null_fields"] != nil {
+				if nullFields, ok := nullTracker[schema.NullTrackerNullFieldsFieldName].([]interface{}); ok {
+					for _, fieldNumber := range nullFields {
+						fieldNumber32, ok := fieldNumber.(int32)
+						if !ok {
+							return nil, fmt.Errorf("invalid null tracker field number type")
+						}
+						field := getFieldByNumber(msg, fieldNumber32)
+						result[getFieldName(field)] = nil
+					}
+				}
+			} else if !ok {
+				return nil, fmt.Errorf("invalid null tracker format")
+			}
 		}
 
-		fieldName := getFieldName(field)
-		// add default values only when its not present in result
-		if _, ok := result[fieldName]; !ok {
-			if field.Type.Kind == schema.KindPrimitive { // add default for primitive types except bytes
-				result[fieldName] = getDefaultValue(field.Type.PrimitiveType)
-			} else if field.Type.Kind == schema.KindEnum { // add default value 0 for enum cases
-				enum, err := d.registry.GetEnum(field.Type.EnumType)
-				if err != nil {
-					return nil, err
+		delete(result, schema.NullTrackerFieldName)
+	} else {
+		for _, field := range msg.Fields {
+			if field.Label == schema.LabelRepeated {
+				continue
+			}
+
+			fieldName := getFieldName(field)
+			// add default values only when its not present in result
+			if _, ok := result[fieldName]; !ok {
+				if field.Type.Kind == schema.KindPrimitive { // add default for primitive types except bytes
+					result[fieldName] = getDefaultValue(field.Type.PrimitiveType)
+				} else if field.Type.Kind == schema.KindEnum { // add default value 0 for enum cases
+					enum, err := d.registry.GetEnum(field.Type.EnumType)
+					if err != nil {
+						return nil, err
+					}
+					enumDefaultStringVal, err := d.findEnumValue(enum, 0)
+					if err != nil {
+						return nil, err
+					}
+					result[fieldName] = enumDefaultStringVal
 				}
-				enumDefaultStringVal, err := d.findEnumValue(enum, 0)
-				if err != nil {
-					return nil, err
-				}
-				result[fieldName] = enumDefaultStringVal
 			}
 		}
 	}
+
 	// when message is wrapper, empty message on wire means
 	// two different values based on wrapped item type. If
 	// wrapped item is of repeated type, it means empty list,
@@ -178,6 +203,22 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		return wrappedVal, nil
 	}
 	return result, nil
+}
+
+func getFieldByNumber(msg *schema.Message, fieldNumber int32) *schema.Field {
+	for _, field := range msg.Fields {
+		if field.Number == fieldNumber {
+			return field
+		}
+	}
+	for _, oneof := range msg.OneofGroups {
+		for _, field := range oneof.Fields {
+			if field.Number == fieldNumber {
+				return field
+			}
+		}
+	}
+	return nil
 }
 
 func initNull(result map[string]interface{}, msg *schema.Message) {
