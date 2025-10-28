@@ -313,7 +313,13 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 			tag := MakeTag(FieldNumber(field.Number), wireType)
 			ve.EncodeVarint(uint64(tag))
 			if packed {
-				ve.EncodeInt32(int32(len(slice)))
+				n := len(slice)
+				if field.Type.Kind == schema.KindPrimitive {
+					if size := schema.IsFixedType(field.Type.PrimitiveType); size > 0 {
+						n *= size
+					}
+				}
+				ve.EncodeInt32(int32(n))
 			}
 		}
 

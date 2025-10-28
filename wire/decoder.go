@@ -311,6 +311,9 @@ func (d *Decoder) decodePrimitive(field *schema.Field, wireType WireType) (inter
 			if err != nil {
 				return nil, false, err
 			}
+			if size := schema.IsFixedType(primitiveType); size > 0 {
+				length /= uint64(size)
+			}
 			res := make([]interface{}, 0)
 			for i := 0; i < int(length); i++ {
 				val, err := d.decodePrimitiveHelper(primitiveType)

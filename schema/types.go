@@ -139,6 +139,18 @@ func IsPackedType(t PrimitiveType) bool {
 	return ok
 }
 
+// IsFixedType checks if the type is of fixed size such as fixed32 etc, returns byte size.
+func IsFixedType(t PrimitiveType) int {
+	switch t {
+	case TypeFixed32, TypeSfixed32:
+		return 4
+	case TypeFixed64, TypeSfixed64:
+		return 8
+	default:
+		return 0
+	}
+}
+
 // WrapperType represents protobuf wrapper types
 type WrapperType string
 
