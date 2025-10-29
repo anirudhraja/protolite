@@ -295,21 +295,37 @@ func (me *MessageEncoder) encodeRepeatedField(value interface{}, field *schema.F
 		packed = true
 	}
 
-	// For each element in the slice, encode field tag + value
-	for i, element := range slice {
-		ve := NewVarintEncoder(me.encoder)
-		if i == 0 || !packed {
-			// Encode field tag for each element
-			wireType := me.getWireType(&field.Type)
-			if packed {
-				wireType = WireBytes
+	if packed {
+		tag := MakeTag(FieldNumber(field.Number), WireBytes)
+		NewVarintEncoder(me.encoder).EncodeVarint(uint64(tag))
+		b := NewMessageEncoder(NewEncoderWithRegistry(me.encoder.registry))
+		switch field.Type.Kind {
+		case schema.KindPrimitive:
+			for _, v := range slice {
+				if err := b.encodePrimitiveField(v, field.Type.PrimitiveType); err != nil {
+					return err
+				}
 			}
-			tag := MakeTag(FieldNumber(field.Number), wireType)
-			ve.EncodeVarint(uint64(tag))
-			if packed {
-				ve.EncodeInt32(int32(len(slice)))
+		case schema.KindEnum:
+			for _, v := range slice {
+				if err := b.encodeEnumField(v, field.Type); err != nil {
+					return err
+				}
 			}
+		default:
+			return fmt.Errorf("unexpected type %s for packed encoding", field.Type.Kind)
 		}
+		NewBytesEncoder(me.encoder).EncodeBytes(b.encoder.Bytes())
+		return nil
+	}
+
+	// For each element in the slice, encode field tag + value
+	for _, element := range slice {
+		ve := NewVarintEncoder(me.encoder)
+		// Encode field tag for each element
+		wireType := me.getWireType(&field.Type)
+		tag := MakeTag(FieldNumber(field.Number), wireType)
+		ve.EncodeVarint(uint64(tag))
 
 		// Encode the element value
 		switch field.Type.Kind {
