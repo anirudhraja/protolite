@@ -49,6 +49,7 @@ message User {
     ShowMeNull show_me_null = 29;
     WrappedUnion graphql_union = 30;
     google.protobuf.StringValue rawJSON = 31 [json_name = "raw_json", json_string = true];
+    repeated fixed32 fixed32_list = 32;
 
     message ListContainingNullItemWrapper {
         option wrapper = true;

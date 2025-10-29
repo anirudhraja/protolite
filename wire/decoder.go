@@ -241,7 +241,6 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 		value, err := md.DecodeMessage(fieldType.MessageType)
 		return value, false, err
 	case schema.KindEnum:
-		len := uint64(1)
 		var err error
 		result := make([]interface{}, 0)
 		// first check if the enum is registered
@@ -249,33 +248,38 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 		if err != nil {
 			return nil, false, err
 		}
+		vd := NewVarintDecoder(d)
 		// get the length first if its repeated enum
 		if field.Label == schema.LabelRepeated {
-			vd := NewVarintDecoder(d)
-			len, err = vd.DecodeVarint()
+			length, err := vd.DecodeVarint()
 			if err != nil {
 				return nil, false, err
 			}
-		}
-		// one by one read the bytes and find the relevant field name for it.
-		for i := 0; i < int(len); i++ {
-			vd := NewVarintDecoder(d)
-			enumIntVal, err := vd.DecodeEnum()
-			if err != nil {
-				return nil, false, err
+			// one by one read the bytes and find the relevant field name for it.
+			end := d.pos + int(length)
+			for d.pos < end {
+				vd := NewVarintDecoder(d)
+				enumIntVal, err := vd.DecodeEnum()
+				if err != nil {
+					return nil, false, err
+				}
+				enumStringVal, err := d.findEnumValue(enum, enumIntVal)
+				if err != nil {
+					return nil, false, err
+				}
+				result = append(result, enumStringVal)
 			}
-			enumStringVal, err := d.findEnumValue(enum, enumIntVal)
-			if err != nil {
-				return nil, false, err
-			}
-			result = append(result, enumStringVal)
+			return result, true, nil
 		}
-		// if its not repeated, return a single value
-		if field.Label != schema.LabelRepeated {
-			return result[0], false, nil // we are guaranteed atleast one value in the slice if we reach here
+		enumIntVal, err := vd.DecodeEnum()
+		if err != nil {
+			return nil, false, err
 		}
-		// otherwise return the slice and the whole list gets appended
-		return result, true, nil
+		enumStringVal, err := d.findEnumValue(enum, enumIntVal)
+		if err != nil {
+			return nil, false, err
+		}
+		return enumStringVal, false, nil
 
 	case schema.KindMap:
 		mapDecoder := NewMapDecoder(d)
@@ -312,7 +316,8 @@ func (d *Decoder) decodePrimitive(field *schema.Field, wireType WireType) (inter
 				return nil, false, err
 			}
 			res := make([]interface{}, 0)
-			for i := 0; i < int(length); i++ {
+			end := d.pos + int(length)
+			for d.pos < end {
 				val, err := d.decodePrimitiveHelper(primitiveType)
 				if err != nil {
 					return nil, false, err
