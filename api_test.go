@@ -556,6 +556,7 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 				"lat":  1.23,
 				"long": 4.56,
 			},
+			"fixed32_list": []interface{}{uint32(1), uint32(2), uint32(3)},
 		}
 
 		t.Logf("Original User Data: %+v", userData)
@@ -773,6 +774,15 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		}
 		if !reflect.DeepEqual(userData["raw_json"], rawJSON) {
 			t.Fatalf("Expected raw_json to be %v, got %v", userData["raw_json"], rawJSON)
+		}
+
+		// Verify fixed32 list
+		fixed32List, ok := userMap["fixed32_list"]
+		if !ok {
+			t.Fatalf("Expected fixed32_list to be list, got %T", userMap["fixed32_list"])
+		}
+		if !reflect.DeepEqual(fixed32List, userData["fixed32_list"]) {
+			t.Fatalf("Expected fixed32_list to be %v, got %v", userData["fixed32_list"], fixed32List)
 		}
 
 		t.Log("✅ User-Posts relationship test completed successfully!")
