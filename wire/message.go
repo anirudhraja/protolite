@@ -108,10 +108,6 @@ func getOneOfField(msg *schema.Message, typeName string) *schema.Field {
 
 // EncodeMessage encodes a message with the given data
 func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema.Message) error {
-	// Create a temporary encoder for the message content
-	messageEncoder := NewEncoder()
-	messageEncoder.registry = me.encoder.registry
-
 	// Encode each field
 	// To iterate over data in a sorted manner by field number, collect valid fields first.
 	type fieldEntry struct {
@@ -168,7 +164,7 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 
 		// Handle map fields specially
 		if field.Type.Kind == schema.KindMap {
-			if err := me.encodeMapField(messageEncoder, fieldValue, field); err != nil {
+			if err := me.encodeMapField(fieldValue, field); err != nil {
 				return wrapWithField(err, fieldName)
 			}
 			continue
@@ -176,34 +172,32 @@ func (me *MessageEncoder) encodeMessage(data map[string]interface{}, msg *schema
 
 		// For repeated fields, encodeFieldValue handles the field tags
 		if field.Label == schema.LabelRepeated {
-			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
+			if err := me.encodeFieldValue(fieldValue, field); err != nil {
 				return wrapWithField(err, fieldName)
 			}
 
 		} else {
 			// For non-repeated fields, encode field tag first
-			ve := NewVarintEncoder(messageEncoder)
+			ve := NewVarintEncoder(me.encoder)
 			wireType := me.getWireType(&field.Type)
 			tag := MakeTag(FieldNumber(field.Number), wireType)
 			ve.EncodeVarint(uint64(tag))
 
 			// Encode field value
-			if err := me.encodeFieldValue(messageEncoder, fieldValue, field); err != nil {
+			if err := me.encodeFieldValue(fieldValue, field); err != nil {
 				return wrapWithField(err, fieldName)
 			}
 		}
 	}
 
-	// Add the message bytes to the main encoder
-	me.encoder.buf = append(me.encoder.buf, messageEncoder.buf...)
 	return nil
 }
 
 // encodeFieldValue encodes a field value based on its type
-func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, field *schema.Field) error {
+func (me *MessageEncoder) encodeFieldValue(value interface{}, field *schema.Field) error {
 	// Handle repeated fields
 	if field.Label == schema.LabelRepeated {
-		return me.encodeRepeatedField(encoder, value, field)
+		return me.encodeRepeatedField(value, field)
 	}
 	if field.JSONString {
 		b, _ := json.Marshal(value)
@@ -211,20 +205,20 @@ func (me *MessageEncoder) encodeFieldValue(encoder *Encoder, value interface{}, 
 	}
 	switch field.Type.Kind {
 	case schema.KindPrimitive:
-		return me.encodePrimitiveField(encoder, value, field.Type.PrimitiveType)
+		return me.encodePrimitiveField(value, field.Type.PrimitiveType)
 	case schema.KindMessage:
-		return me.encodeMessageField(encoder, value, field.Type.MessageType)
+		return me.encodeMessageField(value, field.Type.MessageType)
 	case schema.KindEnum:
-		return me.encodeEnumField(encoder, value, field.Type)
+		return me.encodeEnumField(value, field.Type)
 	case schema.KindWrapper:
-		return me.encodeWrapperField(encoder, value, field.Type.WrapperType)
+		return me.encodeWrapperField(value, field.Type.WrapperType)
 	default:
 		return fmt.Errorf("unsupported field type: %s", field.Type.Kind)
 	}
 }
 
 // encodeRepeatedField encodes a repeated field
-func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{}, field *schema.Field) error {
+func (me *MessageEncoder) encodeRepeatedField(value interface{}, field *schema.Field) error {
 	if value == nil {
 		return nil
 	}
@@ -303,7 +297,7 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 
 	// For each element in the slice, encode field tag + value
 	for i, element := range slice {
-		ve := NewVarintEncoder(encoder)
+		ve := NewVarintEncoder(me.encoder)
 		if i == 0 || !packed {
 			// Encode field tag for each element
 			wireType := me.getWireType(&field.Type)
@@ -320,19 +314,19 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 		// Encode the element value
 		switch field.Type.Kind {
 		case schema.KindPrimitive:
-			if err := me.encodePrimitiveField(encoder, element, field.Type.PrimitiveType); err != nil {
+			if err := me.encodePrimitiveField(element, field.Type.PrimitiveType); err != nil {
 				return err
 			}
 		case schema.KindMessage:
-			if err := me.encodeMessageField(encoder, element, field.Type.MessageType); err != nil {
+			if err := me.encodeMessageField(element, field.Type.MessageType); err != nil {
 				return err
 			}
 		case schema.KindEnum:
-			if err := me.encodeEnumField(encoder, element, field.Type); err != nil {
+			if err := me.encodeEnumField(element, field.Type); err != nil {
 				return err
 			}
 		case schema.KindWrapper:
-			if err := me.encodeWrapperField(encoder, element, field.Type.WrapperType); err != nil {
+			if err := me.encodeWrapperField(element, field.Type.WrapperType); err != nil {
 				return err
 			}
 		default:
@@ -344,7 +338,8 @@ func (me *MessageEncoder) encodeRepeatedField(encoder *Encoder, value interface{
 }
 
 // encodePrimitiveField encodes a primitive field
-func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface{}, primitiveType schema.PrimitiveType) error {
+func (me *MessageEncoder) encodePrimitiveField(value interface{}, primitiveType schema.PrimitiveType) error {
+	encoder := me.encoder
 	switch primitiveType {
 	case schema.TypeString:
 		v, ok := value.(string)
@@ -545,7 +540,8 @@ func (me *MessageEncoder) encodePrimitiveField(encoder *Encoder, value interface
 }
 
 // encodeMessageField encodes a nested message field
-func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}, messageTypeName string) error {
+func (me *MessageEncoder) encodeMessageField(value interface{}, messageTypeName string) error {
+	encoder := me.encoder
 	// If it's already bytes, encode directly
 	if messageBytes, ok := value.([]byte); ok {
 		be := NewBytesEncoder(encoder)
@@ -579,7 +575,7 @@ func (me *MessageEncoder) encodeMessageField(encoder *Encoder, value interface{}
 }
 
 // encodeEnumField encodes an enum field
-func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}, fieldType schema.FieldType) error {
+func (me *MessageEncoder) encodeEnumField(value interface{}, fieldType schema.FieldType) error {
 	enumValue, ok := value.(string)
 	if !ok {
 		// check if the enum value is a JSON Number
@@ -595,7 +591,7 @@ func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}, f
 	}
 	for _, en := range enum.Values {
 		if en.Name == enumValue || en.JsonName == enumValue {
-			ve := NewVarintEncoder(encoder)
+			ve := NewVarintEncoder(me.encoder)
 			ve.EncodeEnum(en.Number)
 			return nil
 		}
@@ -605,7 +601,7 @@ func (me *MessageEncoder) encodeEnumField(encoder *Encoder, value interface{}, f
 }
 
 // encodeWrapperField encodes a wrapper field
-func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}, wrapperType schema.WrapperType) error {
+func (me *MessageEncoder) encodeWrapperField(value interface{}, wrapperType schema.WrapperType) error {
 	// If wrapper value is nil, don't encode anything (optional semantics)
 	if value == nil {
 		return nil
@@ -815,13 +811,13 @@ func (me *MessageEncoder) encodeWrapperField(encoder *Encoder, value interface{}
 	}
 
 	// Now encode the wrapper message bytes as a length-delimited field
-	be := NewBytesEncoder(encoder)
+	be := NewBytesEncoder(me.encoder)
 	be.EncodeBytes(wrapperEncoder.Bytes())
 	return nil
 }
 
 // encodeMapField encodes a map field
-func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, field *schema.Field) error {
+func (me *MessageEncoder) encodeMapField(value interface{}, field *schema.Field) error {
 	var mapData map[interface{}]interface{}
 
 	// Handle different map types
@@ -881,7 +877,7 @@ func (me *MessageEncoder) encodeMapField(encoder *Encoder, value interface{}, fi
 	}
 
 	// Use the map encoder to encode the entire map with field tags
-	mapEncoder := NewMapEncoder(encoder)
+	mapEncoder := NewMapEncoder(me.encoder)
 	return mapEncoder.EncodeMap(mapData, field.Type.MapKey, field.Type.MapValue, field.Number)
 }
 
