@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -389,10 +390,18 @@ func (me *MessageEncoder) encodePrimitiveField(value interface{}, primitiveType 
 							return fmt.Errorf("out of range value for byte")
 						}
 						v = append(v, byte(num))
+					default:
+						return fmt.Errorf("invalid value type %T for byte array", val)
 					}
 				}
+			} else if w, ok := value.(string); ok {
+				var err error
+				v, err = base64.StdEncoding.DecodeString(w)
+				if err != nil {
+					return fmt.Errorf("invalid base64 string for byte array, %w", err)
+				}
 			} else {
-				return fmt.Errorf("expected []byte, got %T", value)
+				return fmt.Errorf("expected []byte or base64 string, got %T", value)
 			}
 		}
 		NewBytesEncoder(encoder).EncodeBytes(v)
