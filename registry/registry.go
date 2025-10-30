@@ -2,6 +2,7 @@ package registry
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -35,7 +36,32 @@ func NewRegistry(ProtoDirectories []string) *Registry {
 
 // LoadSchema Given a path it will recursively scan all *proto files inside it and return schema.ProtoRepo
 func (r *Registry) LoadSchema(protoPath string) error {
-	// Initialize the registry maps if not already done
+	// Initialize the registry
+	r.initializeRegistry()
+
+	allProtoFiles, err := r.getAllProtoInfo(protoPath)
+	if err != nil {
+		return err
+	}
+
+	return r.processProtoFiles(allProtoFiles)
+}
+
+// LoadSchemaFromReader loads schema from an io.Reader with a unique identifier, while dependent protos are loaded from file paths
+func (r *Registry) LoadSchemaFromReader(reader io.Reader, identifier string) error {
+	// Initialize the registry
+	r.initializeRegistry()
+
+	allProtoFiles, err := r.getAllProtoInfoFromReader(reader, identifier)
+	if err != nil {
+		return err
+	}
+
+	return r.processProtoFiles(allProtoFiles)
+}
+
+// initializeRegistry initializes all registry maps and repo if not already done
+func (r *Registry) initializeRegistry() {
 	if r.messages == nil {
 		r.messages = make(map[string]*schema.Message)
 	}
@@ -48,22 +74,18 @@ func (r *Registry) LoadSchema(protoPath string) error {
 	if r.protoEntities == nil {
 		r.protoEntities = map[string]*protoFileEntity{}
 	}
-	// Initialize the repo if not already done
 	if r.parsedProtoBody == nil {
 		r.parsedProtoBody = map[string]*protoparserparser.Proto{}
 	}
-
-	// Initialize the repo if not already done
 	if r.repo == nil {
 		r.repo = &schema.ProtoRepo{
 			ProtoFiles: make(map[string]*schema.ProtoFile),
 		}
 	}
-	allProtoFiles, err := r.getAllProtoInfo(protoPath)
-	if err != nil {
-		return err
-	}
+}
 
+// processProtoFiles processes all proto files: resolves entities, loads files, and builds symbol table
+func (r *Registry) processProtoFiles(allProtoFiles []string) error {
 	for _, protoPath := range allProtoFiles {
 		// resolves and stores the type in proto file
 		protoFileEntity, err := r.resolveProtoFile(protoPath)

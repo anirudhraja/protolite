@@ -3,6 +3,7 @@ package protolite
 import (
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 
@@ -26,6 +27,10 @@ type Protolite interface {
 
 	// LoadSchemaFromFile loads schema definitions from a .proto file
 	LoadSchemaFromFile(protoPath string) error
+
+	// LoadSchemaFromReader loads schema definitions from an io.Reader with a unique identifier
+	// The identifier is used as a unique key for the schema, while dependent imports are still loaded from file paths
+	LoadSchemaFromReader(reader io.Reader, identifier string) error
 }
 
 type protolite struct {
@@ -91,6 +96,11 @@ func (p *protolite) Parse(data []byte) (map[string]interface{}, error) {
 // LoadSchemaFromFile loads schema definitions from a .proto file
 func (p *protolite) LoadSchemaFromFile(protoPath string) error {
 	return p.registry.LoadSchema(protoPath)
+}
+
+// LoadSchemaFromReader loads schema definitions from an io.Reader with a unique identifier
+func (p *protolite) LoadSchemaFromReader(reader io.Reader, identifier string) error {
+	return p.registry.LoadSchemaFromReader(reader, identifier)
 }
 
 // Additional helper methods that require schema
