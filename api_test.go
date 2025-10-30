@@ -791,3 +791,293 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		t.Log("✅ All field values verified")
 	})
 }
+
+// TestLoadSchemaFromReader tests loading schema from an io.Reader
+func TestLoadSchemaFromReader(t *testing.T) {
+	// Create a simple proto schema as a string
+	protoContent := `
+syntax = "proto3";
+
+package example;
+
+message SimpleUser {
+    int32 id = 1;
+    string name = 2;
+    string email = 3;
+    bool active = 4;
+}
+`
+
+	// Create a reader from the proto content
+	reader := strings.NewReader(protoContent)
+
+	// Create Protolite instance with the testdata directory for any imports
+	proto := NewProtolite([]string{"./sampleapp/testdata"})
+
+	// Load schema from reader with a unique identifier
+	err := proto.LoadSchemaFromReader(reader, "simple_user.proto")
+	if err != nil {
+		t.Fatalf("Failed to load schema from reader: %v", err)
+	}
+
+	// Test that we can use the schema
+	testData := map[string]interface{}{
+		"id":     int32(123),
+		"name":   "John Doe",
+		"email":  "john@example.com",
+		"active": true,
+	}
+
+	// Marshal the data
+	encoded, err := proto.MarshalWithSchema(testData, "SimpleUser")
+	if err != nil {
+		t.Fatalf("Failed to marshal: %v", err)
+	}
+
+	if len(encoded) == 0 {
+		t.Fatal("Expected non-empty encoded data")
+	}
+
+	// Unmarshal back
+	result, err := proto.UnmarshalWithSchema(encoded, "SimpleUser")
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Verify the data
+	if result["id"].(int32) != 123 {
+		t.Errorf("Expected id=123, got %v", result["id"])
+	}
+	if result["name"].(string) != "John Doe" {
+		t.Errorf("Expected name='John Doe', got %v", result["name"])
+	}
+	if result["email"].(string) != "john@example.com" {
+		t.Errorf("Expected email='john@example.com', got %v", result["email"])
+	}
+	if result["active"].(bool) != true {
+		t.Errorf("Expected active=true, got %v", result["active"])
+	}
+}
+
+func TestLoadSchemaFromReaderWithStruct(t *testing.T) {
+	// Create a proto schema
+	protoContent := `
+syntax = "proto3";
+
+package example;
+
+message Product {
+    int32 product_id = 1;
+    string product_name = 2;
+    double price = 3;
+    bool in_stock = 4;
+}
+`
+
+	reader := strings.NewReader(protoContent)
+	proto := NewProtolite([]string{"./sampleapp/testdata"})
+
+	err := proto.LoadSchemaFromReader(reader, "product.proto")
+	if err != nil {
+		t.Fatalf("Failed to load schema from reader: %v", err)
+	}
+
+	// Define a matching Go struct
+	type Product struct {
+		ProductID   int32   `json:"product_id"`
+		ProductName string  `json:"product_name"`
+		Price       float64 `json:"price"`
+		InStock     bool    `json:"in_stock"`
+	}
+
+	testData := map[string]interface{}{
+		"product_id":   int32(456),
+		"product_name": "Laptop",
+		"price":        999.99,
+		"in_stock":     true,
+	}
+
+	// Marshal
+	encoded, err := proto.MarshalWithSchema(testData, "Product")
+	if err != nil {
+		t.Fatalf("Failed to marshal: %v", err)
+	}
+
+	// Unmarshal to struct
+	var product Product
+	err = proto.UnmarshalToStruct(encoded, "Product", &product)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal to struct: %v", err)
+	}
+
+	// Verify
+	if product.ProductID != 456 {
+		t.Errorf("Expected ProductID=456, got %v", product.ProductID)
+	}
+	if product.ProductName != "Laptop" {
+		t.Errorf("Expected ProductName='Laptop', got %v", product.ProductName)
+	}
+	if product.Price != 999.99 {
+		t.Errorf("Expected Price=999.99, got %v", product.Price)
+	}
+	if product.InStock != true {
+		t.Errorf("Expected InStock=true, got %v", product.InStock)
+	}
+}
+
+// TestLoadSchemaMultipleTimes verifies that loading the same schema multiple times
+// doesn't cause re-processing of already loaded proto files
+func TestLoadSchemaMultipleTimes(t *testing.T) {
+	proto := NewProtolite([]string{"./sampleapp/testdata"})
+
+	// Load the same schema multiple times
+	err := proto.LoadSchemaFromFile("user.proto")
+	if err != nil {
+		t.Fatalf("First load failed: %v", err)
+	}
+
+	// Load again - should skip already processed files
+	err = proto.LoadSchemaFromFile("user.proto")
+	if err != nil {
+		t.Fatalf("Second load failed: %v", err)
+	}
+
+	// Load again - should still work
+	err = proto.LoadSchemaFromFile("user.proto")
+	if err != nil {
+		t.Fatalf("Third load failed: %v", err)
+	}
+
+	// Verify that the schema is still functional
+	testData := map[string]interface{}{
+		"id":     int32(1),
+		"name":   "Test User",
+		"active": true,
+	}
+
+	encoded, err := proto.MarshalWithSchema(testData, "User")
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	result, err := proto.UnmarshalWithSchema(encoded, "User")
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result["id"].(int32) != 1 {
+		t.Errorf("Expected id=1, got %v", result["id"])
+	}
+	if result["name"].(string) != "Test User" {
+		t.Errorf("Expected name='Test User', got %v", result["name"])
+	}
+}
+
+// TestLoadSchemaFromReaderMultipleTimes verifies deduplication with reader-based loading
+func TestLoadSchemaFromReaderMultipleTimes(t *testing.T) {
+	protoContent := `
+syntax = "proto3";
+
+package test;
+
+message Item {
+    int32 id = 1;
+    string name = 2;
+}
+`
+
+	proto := NewProtolite([]string{"./sampleapp/testdata"})
+
+	// Load from reader first time
+	reader1 := strings.NewReader(protoContent)
+	err := proto.LoadSchemaFromReader(reader1, "item.proto")
+	if err != nil {
+		t.Fatalf("First load failed: %v", err)
+	}
+
+	// Load from reader second time with same identifier - should skip
+	reader2 := strings.NewReader(protoContent)
+	err = proto.LoadSchemaFromReader(reader2, "item.proto")
+	if err != nil {
+		t.Fatalf("Second load failed: %v", err)
+	}
+
+	// Verify functionality
+	testData := map[string]interface{}{
+		"id":   int32(42),
+		"name": "Test Item",
+	}
+
+	encoded, err := proto.MarshalWithSchema(testData, "Item")
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	result, err := proto.UnmarshalWithSchema(encoded, "Item")
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result["id"].(int32) != 42 {
+		t.Errorf("Expected id=42, got %v", result["id"])
+	}
+}
+
+// TestLoadSchemaMixedSourcesWithDuplicates tests loading from both file and reader
+// when they share common imports
+func TestLoadSchemaMixedSourcesWithDuplicates(t *testing.T) {
+	proto := NewProtolite([]string{"./sampleapp/testdata"})
+
+	// Load user.proto from file (which imports post.proto)
+	err := proto.LoadSchemaFromFile("user.proto")
+	if err != nil {
+		t.Fatalf("Loading user.proto failed: %v", err)
+	}
+
+	// Now load a schema from reader that also imports post.proto
+	// post.proto should not be re-processed
+	protoContent := `
+syntax = "proto3";
+
+package blog;
+
+import "post.proto";
+
+message Article {
+    int32 id = 1;
+    Post post = 2;
+}
+`
+
+	reader := strings.NewReader(protoContent)
+	err = proto.LoadSchemaFromReader(reader, "article.proto")
+	if err != nil {
+		t.Fatalf("Loading article.proto failed: %v", err)
+	}
+
+	// Verify both User and Article messages are available
+	userData := map[string]interface{}{
+		"id":     int32(1),
+		"name":   "John",
+		"active": true,
+	}
+
+	_, err = proto.MarshalWithSchema(userData, "User")
+	if err != nil {
+		t.Fatalf("Marshal User failed: %v", err)
+	}
+
+	articleData := map[string]interface{}{
+		"id": int32(100),
+		"post": map[string]interface{}{
+			"id":      int32(1),
+			"title":   "Test Post",
+			"content": "Test Content",
+		},
+	}
+
+	_, err = proto.MarshalWithSchema(articleData, "Article")
+	if err != nil {
+		t.Fatalf("Marshal Article failed: %v", err)
+	}
+}

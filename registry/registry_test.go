@@ -31,7 +31,8 @@ func TestNewRegistry(t *testing.T) {
 func TestLoadSchema_NonExistentPath(t *testing.T) {
 	registry := NewRegistry([]string{""})
 
-	err := registry.LoadSchema("/nonexistent/path")
+	// Try to find a non-existent path (will fail at FindProtoPath)
+	_, err := registry.FindProtoPath("/nonexistent/path")
 	if err == nil {
 		t.Error("Expected error for non-existent path")
 	}
@@ -51,7 +52,8 @@ func TestLoadSchema_NonProtoFile(t *testing.T) {
 	tmpFile.Close()
 
 	registry := NewRegistry([]string{""})
-	err = registry.LoadSchema(tmpFile.Name())
+	// Try to find a non-proto file (will fail at FindProtoPath)
+	_, err = registry.FindProtoPath(tmpFile.Name())
 
 	if err == nil {
 		t.Error("Expected error for non-proto file")
@@ -95,7 +97,15 @@ service TestService {
 	}
 
 	registry := NewRegistry([]string{""})
-	err = registry.LoadSchema(protoFile)
+
+	// Use LoadSchema instead
+	file, err := os.Open(protoFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	err = registry.LoadSchema(file, protoFile)
 	if err != nil {
 		t.Fatalf("LoadSchema failed: %v", err)
 	}
@@ -539,7 +549,14 @@ message TestMessage {
 		ProtoFiles: make(map[string]*schema.ProtoFile),
 	}
 
-	err = registry.LoadSchema(tmpFile.Name())
+	// Use LoadSchema instead
+	file, err := os.Open(tmpFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	err = registry.LoadSchema(file, tmpFile.Name())
 	if err != nil {
 		t.Fatalf("loadSingleProtoFile failed: %v", err)
 	}

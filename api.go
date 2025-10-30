@@ -3,6 +3,8 @@ package protolite
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"strings"
 
@@ -26,6 +28,10 @@ type Protolite interface {
 
 	// LoadSchemaFromFile loads schema definitions from a .proto file
 	LoadSchemaFromFile(protoPath string) error
+
+	// LoadSchemaFromReader loads schema definitions from an io.Reader with a unique identifier
+	// The identifier is used as a unique key for the schema, while dependent imports are still loaded from file paths
+	LoadSchemaFromReader(reader io.Reader, identifier string) error
 }
 
 type protolite struct {
@@ -89,8 +95,28 @@ func (p *protolite) Parse(data []byte) (map[string]interface{}, error) {
 }
 
 // LoadSchemaFromFile loads schema definitions from a .proto file
+// It internally uses LoadSchemaFromReader by creating a reader from the file
 func (p *protolite) LoadSchemaFromFile(protoPath string) error {
-	return p.registry.LoadSchema(protoPath)
+	// Resolve the full path using registry's proto directories
+	fullPath, err := p.registry.FindProtoPath(protoPath)
+	if err != nil {
+		return err
+	}
+
+	// Open and read the file
+	file, err := os.Open(fullPath)
+	if err != nil {
+		return fmt.Errorf("failed to open proto file: %w", err)
+	}
+	defer file.Close()
+
+	// Use LoadSchema with the full path as identifier
+	return p.registry.LoadSchema(file, fullPath)
+}
+
+// LoadSchemaFromReader loads schema definitions from an io.Reader with a unique identifier
+func (p *protolite) LoadSchemaFromReader(reader io.Reader, identifier string) error {
+	return p.registry.LoadSchema(reader, identifier)
 }
 
 // Additional helper methods that require schema
