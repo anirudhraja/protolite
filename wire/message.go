@@ -367,7 +367,33 @@ func (me *MessageEncoder) encodePrimitiveField(value interface{}, primitiveType 
 	case schema.TypeBytes:
 		v, ok := value.([]byte)
 		if !ok {
-			return fmt.Errorf("expected []byte, got %T", value)
+			if w, ok := value.([]interface{}); ok {
+				for i := 0; i < len(w); i++ {
+					switch val := w[i].(type) {
+					case int32:
+						if val > 0xFF {
+							return fmt.Errorf("out of range value for byte")
+						}
+						v = append(v, byte(val))
+					case int64:
+						if val > 0xFF {
+							return fmt.Errorf("out of range value for byte")
+						}
+						v = append(v, byte(val))
+					case json.Number:
+						num, err := val.Int64()
+						if err != nil {
+							return fmt.Errorf("invalid value %s for byte", val)
+						}
+						if num > 0xFF {
+							return fmt.Errorf("out of range value for byte")
+						}
+						v = append(v, byte(num))
+					}
+				}
+			} else {
+				return fmt.Errorf("expected []byte, got %T", value)
+			}
 		}
 		NewBytesEncoder(encoder).EncodeBytes(v)
 		return nil
