@@ -701,9 +701,9 @@ func TestProtolite_UnmarshalWithSchema(t *testing.T) {
 		}
 
 		// Verify metadata
-		metadata, ok := userMap["metadata"].(map[interface{}]interface{})
+		metadata, ok := userMap["metadata"].(map[string]interface{})
 		if !ok {
-			t.Errorf("Expected metadata to be a map[interface{}]interface{}, got %T", userMap["metadata"])
+			t.Errorf("Expected metadata to be a map[string]interface{}, got %T", userMap["metadata"])
 		} else {
 			expectedMetadata := map[string]string{
 				"timezone":   "UTC",
