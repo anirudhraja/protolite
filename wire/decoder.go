@@ -115,7 +115,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 	// Add collected maps to result
 	for fieldName, mapData := range mapCollector {
 		var key interface{}
-		for k, _ := range mapData {
+		for k := range mapData {
 			key = k
 			break
 		}
