@@ -3,6 +3,7 @@ package registry
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -19,69 +20,112 @@ const (
 	optionTrackNull      = "track_null"
 )
 
-// getAllProtoInfo uses DFS to fetch all the files from all directories passed and stores relevant proto files
-func (r *Registry) getAllProtoInfo(protoFile string) ([]string, error) {
+// getAllProtoInfoFromReader uses DFS to fetch proto info starting from a reader, with dependent protos loaded from files
+func (r *Registry) getAllProtoInfoFromReader(reader io.Reader, identifier string) ([]string, error) {
+	// Read all bytes from reader
+	protoBytes, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read from reader: %w", err)
+	}
+
+	// Use common DFS traversal starting with the reader content
+	return r.traverseProtoWithDFS(identifier, protoBytes)
+}
+
+// traverseProtoWithDFS performs DFS traversal starting from an initial proto file
+// It processes the initial proto and recursively processes all its imports
+func (r *Registry) traverseProtoWithDFS(initialIdentifier string, initialProtoBytes []byte) ([]string, error) {
 	visited := make(map[string]struct{}) // to make sure we don't end up in a loop
 	result := make([]string, 0)
 
+	// Create the DFS function that processes a proto file from the file system
 	var dfs func(protoFile string) error
 	dfs = func(protoFile string) error {
+		// Skip if already visited in this traversal
 		if _, ok := visited[protoFile]; ok {
 			return nil
 		}
+
+		// Skip if already processed in registry from a previous LoadSchema call
+		if r.parsedProtoBody != nil {
+			if _, ok := r.parsedProtoBody[protoFile]; ok {
+				return nil
+			}
+		}
+
 		visited[protoFile] = struct{}{}
 		result = append(result, protoFile)
-		protoFileEntity := &protoFileEntity{
-			imports: make([]string, 0),
-		}
-		// Parse the proto file using go-protoparser
-		f, err := os.Open(protoFile)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
 
+		// Read proto bytes from file
 		protoBytes, err := os.ReadFile(protoFile)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
-		buf := bytes.NewBuffer(protoBytes)
-		parsedBody, err := protoparser.Parse(buf)
-		if err != nil {
+
+		// Process the proto bytes and recursively handle imports
+		if err := r.processProtoBytes(protoFile, protoBytes, dfs); err != nil {
 			return err
 		}
-		r.parsedProtoBody[protoFile] = parsedBody
-		for _, body := range parsedBody.ProtoBody {
-			switch b := body.(type) {
-			case *protoparserparser.Import: // resolve relation for each imports
-				importPath := b.Location
-				importPath = strings.Trim(importPath, `"`)
-				// TODO handle this better
-				if strings.Contains(importPath, "google/protobuf/wrappers.proto") {
-					continue
-				}
-				fullImportPath, err := r.findIfProtoExists(importPath)
-				if err != nil {
-					return err
-				}
-				protoFileEntity.imports = append(protoFileEntity.imports, fullImportPath)
-				if err = dfs(fullImportPath); err != nil {
-					return err
-				}
-			}
-		}
-		r.protoEntities[protoFile] = protoFileEntity
+
 		return nil
 	}
-	// run dfs on the input proto path
-	protoPath, err := r.findIfProtoExists(protoFile)
-	if err != nil {
+
+	// Check if initial proto already exists in registry from previous LoadSchema call
+	if r.parsedProtoBody != nil {
+		if _, ok := r.parsedProtoBody[initialIdentifier]; ok {
+			// Already processed, return empty list (nothing new to process)
+			return []string{}, nil
+		}
+	}
+
+	// Process the initial proto (mark as visited and process it)
+	visited[initialIdentifier] = struct{}{}
+	result = append(result, initialIdentifier)
+
+	// Process the initial proto bytes and trigger DFS for its imports
+	if err := r.processProtoBytes(initialIdentifier, initialProtoBytes, dfs); err != nil {
 		return nil, err
 	}
-	if err := dfs(protoPath); err != nil {
-		return nil, err
-	}
+
 	return result, nil
+}
+
+// processProtoBytes is a common method to parse proto bytes and handle imports
+func (r *Registry) processProtoBytes(identifier string, protoBytes []byte, dfs func(string) error) error {
+	protoFileEntity := &protoFileEntity{
+		imports: make([]string, 0),
+	}
+
+	// Parse the proto bytes using go-protoparser
+	buf := bytes.NewBuffer(protoBytes)
+	parsedBody, err := protoparser.Parse(buf)
+	if err != nil {
+		return fmt.Errorf("failed to parse proto: %w", err)
+	}
+	r.parsedProtoBody[identifier] = parsedBody
+
+	// Process imports
+	for _, body := range parsedBody.ProtoBody {
+		switch b := body.(type) {
+		case *protoparserparser.Import: // resolve relation for each imports
+			importPath := b.Location
+			importPath = strings.Trim(importPath, `"`)
+			// TODO handle this better
+			if strings.Contains(importPath, "google/protobuf/wrappers.proto") {
+				continue
+			}
+			fullImportPath, err := r.findIfProtoExists(importPath)
+			if err != nil {
+				return err
+			}
+			protoFileEntity.imports = append(protoFileEntity.imports, fullImportPath)
+			if err = dfs(fullImportPath); err != nil {
+				return err
+			}
+		}
+	}
+	r.protoEntities[identifier] = protoFileEntity
+	return nil
 }
 
 func (r *Registry) findIfProtoExists(protoPath string) (string, error) {

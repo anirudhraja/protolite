@@ -2,6 +2,7 @@ package registry
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,9 +34,26 @@ func NewRegistry(ProtoDirectories []string) *Registry {
 	}
 }
 
-// LoadSchema Given a path it will recursively scan all *proto files inside it and return schema.ProtoRepo
-func (r *Registry) LoadSchema(protoPath string) error {
-	// Initialize the registry maps if not already done
+// FindProtoPath resolves a proto file path using the configured proto directories
+func (r *Registry) FindProtoPath(protoPath string) (string, error) {
+	return r.findIfProtoExists(protoPath)
+}
+
+// LoadSchema loads schema from an io.Reader with a unique identifier, while dependent protos are loaded from file paths
+func (r *Registry) LoadSchema(reader io.Reader, identifier string) error {
+	// Initialize the registry
+	r.initializeRegistry()
+
+	allProtoFiles, err := r.getAllProtoInfoFromReader(reader, identifier)
+	if err != nil {
+		return err
+	}
+
+	return r.processProtoFiles(allProtoFiles)
+}
+
+// initializeRegistry initializes all registry maps and repo if not already done
+func (r *Registry) initializeRegistry() {
 	if r.messages == nil {
 		r.messages = make(map[string]*schema.Message)
 	}
@@ -48,22 +66,18 @@ func (r *Registry) LoadSchema(protoPath string) error {
 	if r.protoEntities == nil {
 		r.protoEntities = map[string]*protoFileEntity{}
 	}
-	// Initialize the repo if not already done
 	if r.parsedProtoBody == nil {
 		r.parsedProtoBody = map[string]*protoparserparser.Proto{}
 	}
-
-	// Initialize the repo if not already done
 	if r.repo == nil {
 		r.repo = &schema.ProtoRepo{
 			ProtoFiles: make(map[string]*schema.ProtoFile),
 		}
 	}
-	allProtoFiles, err := r.getAllProtoInfo(protoPath)
-	if err != nil {
-		return err
-	}
+}
 
+// processProtoFiles processes all proto files: resolves entities, loads files, and builds symbol table
+func (r *Registry) processProtoFiles(allProtoFiles []string) error {
 	for _, protoPath := range allProtoFiles {
 		// resolves and stores the type in proto file
 		protoFileEntity, err := r.resolveProtoFile(protoPath)
@@ -76,18 +90,17 @@ func (r *Registry) LoadSchema(protoPath string) error {
 		}
 		ent.entities = protoFileEntity
 	}
+	loadedFiles := make([]*schema.ProtoFile, 0, len(allProtoFiles))
 	for _, protoPath := range allProtoFiles {
-		// loadSingleProtoFile processes the proto file
-		if err := r.loadSingleProtoFile(protoPath); err != nil {
+		protofile, err := r.loadSingleProtoFile(protoPath)
+		if err != nil {
 			return fmt.Errorf("failed to load proto file: %w", err)
 		}
-	}
-	// After loading all files, populate the registry maps
-	if err := r.buildSymbolTable(); err != nil {
-		return fmt.Errorf("failed to build symbol table: %w", err)
+		loadedFiles = append(loadedFiles, protofile)
 	}
 
-	return nil
+	// Build symbol table for all loaded files
+	return r.buildSymbolTable(loadedFiles)
 }
 
 func (r *Registry) resolveProtoFile(protoPath string) ([]string, error) {
@@ -144,10 +157,10 @@ func (r *Registry) getAllEntities(filePath string) map[string]struct{} {
 }
 
 // loadSingleProtoFile loads and parses a single .proto file
-func (r *Registry) loadSingleProtoFile(filePath string) error {
+func (r *Registry) loadSingleProtoFile(filePath string) (*schema.ProtoFile, error) {
 	parsedProtoBody, ok := r.parsedProtoBody[filePath]
 	if !ok {
-		return fmt.Errorf("cannot find parsed proto body for: %s", filePath)
+		return nil, fmt.Errorf("cannot find parsed proto body for: %s", filePath)
 	}
 	allResolvedEntities := r.getAllEntities(filePath)
 
@@ -181,19 +194,19 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 		case *protoparserparser.Message:
 			msg, err := r.processMessage(b, allResolvedEntities, protoFile.Package)
 			if err != nil {
-				return fmt.Errorf("Message %s processing failed with err: %v", b.MessageName, err)
+				return nil, fmt.Errorf("Message %s processing failed with err: %v", b.MessageName, err)
 			}
 			protoFile.Messages = append(protoFile.Messages, msg)
 		case *protoparserparser.Enum:
 			enum, err := r.processEnum(b)
 			if err != nil {
-				return fmt.Errorf("Enum %s processing failed with err: %v", b.EnumName, err)
+				return nil, fmt.Errorf("Enum %s processing failed with err: %v", b.EnumName, err)
 			}
 			protoFile.Enums = append(protoFile.Enums, enum)
 		case *protoparserparser.Service:
 			service, err := r.processService(b)
 			if err != nil {
-				return fmt.Errorf("Service %s processing failed with err: %v", b.ServiceName, err)
+				return nil,fmt.Errorf("Service %s processing failed with err: %v", b.ServiceName, err)
 			}
 			protoFile.Services = append(protoFile.Services, service)
 
@@ -201,7 +214,7 @@ func (r *Registry) loadSingleProtoFile(filePath string) error {
 	}
 	// Store in the ProtoRepo
 	r.repo.ProtoFiles[filePath] = protoFile
-	return nil
+	return protoFile, nil
 }
 
 func getNullTrackerMessages() []protoparserparser.Visitee {
@@ -512,23 +525,23 @@ func (r *Registry) convertProtoType(protoType string, allResolvedEntities map[st
 }
 
 // buildSymbolTable builds the symbol table from the loaded repository
-func (r *Registry) buildSymbolTable() error {
+func (r *Registry) buildSymbolTable(protoFiles []*schema.ProtoFile) error {
 	// Pass 1: Register all message and enum names
-	for _, protoFile := range r.repo.ProtoFiles {
+	for _, protoFile := range protoFiles {
 		if err := r.registerNames(protoFile); err != nil {
 			return err
 		}
 	}
 
 	// Pass 2: Build all message and enum definitions
-	for _, protoFile := range r.repo.ProtoFiles {
+	for _, protoFile := range protoFiles {
 		if err := r.buildDefinitions(protoFile); err != nil {
 			return err
 		}
 	}
 
 	// Pass 3: Build services
-	for _, protoFile := range r.repo.ProtoFiles {
+	for _, protoFile := range protoFiles {
 		if err := r.buildServices(protoFile); err != nil {
 			return err
 		}
@@ -605,15 +618,15 @@ func (r *Registry) buildServices(protoFile *schema.ProtoFile) error {
 	for _, service := range protoFile.Services {
 		for _, method := range service.Methods {
 			// Check if input type exists
-			if _, err := r.GetMessage(method.InputType); err != nil {
-				return fmt.Errorf("service %s method %s: input type %s not found",
-					service.Name, method.Name, method.InputType)
+			if _, err := r.GetMessage(protoFile.Package+"."+method.InputType); err != nil {
+				return fmt.Errorf("service %s method %s: input type %s not found,error: %v",
+					service.Name, method.Name, method.InputType, err)
 			}
 
 			// Check if output type exists
-			if _, err := r.GetMessage(method.OutputType); err != nil {
-				return fmt.Errorf("service %s method %s: output type %s not found",
-					service.Name, method.Name, method.OutputType)
+			if _, err := r.GetMessage(protoFile.Package+"."+method.OutputType); err != nil {
+				return fmt.Errorf("service %s method %s: output type %s not found,error: %v",
+					service.Name, method.Name, method.OutputType, err)
 			}
 		}
 	}
