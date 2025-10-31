@@ -79,6 +79,7 @@ func (md *MapDecoder) DecodeMapEntry(keyType, valueType *schema.FieldType) (inte
 func (me *MapEncoder) EncodeMapEntry(key, value interface{}, keyType, valueType *schema.FieldType) error {
 	// Create a temporary encoder for the entry
 	entryEncoder := NewEncoder()
+	entryEncoder.registry = me.encoder.registry
 
 	// Encode key (field number 1)
 	ve := NewVarintEncoder(entryEncoder)
