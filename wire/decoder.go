@@ -114,7 +114,39 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 
 	// Add collected maps to result
 	for fieldName, mapData := range mapCollector {
-		result[fieldName] = mapData
+		var key interface{}
+		for k := range mapData {
+			key = k
+			break
+		}
+		switch key.(type) {
+		case string:
+			newMap := make(map[string]interface{})
+			for k, v := range mapData {
+				newMap[k.(string)] = v
+			}
+			result[fieldName] = newMap
+		case json.Number:
+			newMap := make(map[json.Number]interface{})
+			for k, v := range mapData {
+				newMap[k.(json.Number)] = v
+			}
+			result[fieldName] = newMap
+		case int32:
+			newMap := make(map[int32]interface{})
+			for k, v := range mapData {
+				newMap[k.(int32)] = v
+			}
+			result[fieldName] = newMap
+		case int64:
+			newMap := make(map[int64]interface{})
+			for k, v := range mapData {
+				newMap[k.(int64)] = v
+			}
+			result[fieldName] = newMap
+		default:
+			return nil, fmt.Errorf("unsupported map key type %T", key)
+		}
 	}
 
 	// Add collected repeated fields to result
