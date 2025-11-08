@@ -42,22 +42,37 @@ func DecodeMessage(data []byte, msg *schema.Message, registry *registry.Registry
 
 // Main decoding methods that orchestrate the individual decoders
 func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
-	result := make(map[string]interface{})
+    result := make(map[string]interface{})
+    var unknownBytes []byte
 	mapCollector := make(map[string]map[interface{}]interface{})
 	repeatedCollector := make(map[string][]interface{})
 
 	initNull(result, msg)
 
 	for d.pos < len(d.buf) {
-		// Read field tag using varint decoder
-		tag, err := d.DecodeVarint()
+        // Read field tag using varint decoder
+        tagStart := d.pos
+        tag, err := d.DecodeVarint()
 		if err != nil {
 			return nil, wrapWithField(err, msg.Name)
 		}
 
-		fieldNumber, wireType := ParseTag(Tag(tag))
+        fieldNumber, wireType := ParseTag(Tag(tag))
+        // Field number 0 is illegal in protobuf
+        if fieldNumber == 0 {
+            return nil, fmt.Errorf("illegal field number 0")
+        }
+        // Reject unknown wire types (6/7) when strict mode is enabled
+        if config.StrictWireTypeOnDecode {
+            switch wireType {
+            case WireVarint, WireFixed64, WireBytes, WireFixed32:
+                // known/allowed types
+            default:
+                return nil, fmt.Errorf("unknown wire type: %d", wireType)
+            }
+        }
 
-		// Find field in schema
+        // Find field in schema
 		var field *schema.Field
 		for _, f := range msg.Fields {
 			if f.Number == int32(fieldNumber) {
@@ -76,15 +91,27 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 				}
 			}
 		}
-		// Unknown field - skip it
-		if field == nil {
-			err := d.skipField(wireType)
-			if err != nil {
-				return nil, wrapWithField(err, msg.Name)
-			}
-			continue
-		}
-		fieldName := getFieldName(field)
+        // Unknown field - skip (optionally capture raw bytes)
+        if field == nil {
+            if config.PreserveUnknownBytesOnDecode {
+                before := d.pos
+                if err := d.skipField(wireType); err != nil {
+                    return nil, wrapWithField(err, msg.Name)
+                }
+                fieldEnd := d.pos
+                start := tagStart
+                if start > before { start = before }
+                if start >= 0 && fieldEnd <= len(d.buf) && start < fieldEnd {
+                    unknownBytes = append(unknownBytes, d.buf[start:fieldEnd]...)
+                }
+            } else {
+                if err := d.skipField(wireType); err != nil {
+                    return nil, wrapWithField(err, msg.Name)
+                }
+            }
+            continue
+        }
+        fieldName := getFieldName(field)
 		// Decode using appropriate decoder
 		value, isPackedType, err := d.DecodeTypedField(field, wireType)
 		if err != nil {
@@ -100,7 +127,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			if entryMap, ok := value.(map[string]interface{}); ok {
 				mapCollector[fieldName][entryMap["key"]] = entryMap["value"]
 			}
-		} else if field.Label == schema.LabelRepeated && !isPackedType {
+        } else if field.Label == schema.LabelRepeated && !isPackedType {
 			// Handle repeated fields
 			if repeatedCollector[fieldName] == nil {
 				repeatedCollector[fieldName] = make([]interface{}, 0)
@@ -108,46 +135,49 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			repeatedCollector[fieldName] = append(repeatedCollector[fieldName], value)
 		} else {
 			// Handle regular fields
-			result[fieldName] = value
+            result[fieldName] = value
 		}
 	}
 
-	// Add collected maps to result
-	for fieldName, mapData := range mapCollector {
-		var key interface{}
-		for k := range mapData {
-			key = k
-			break
-		}
-		switch key.(type) {
-		case string:
-			newMap := make(map[string]interface{})
-			for k, v := range mapData {
-				newMap[k.(string)] = v
-			}
-			result[fieldName] = newMap
-		case json.Number:
-			newMap := make(map[json.Number]interface{})
-			for k, v := range mapData {
-				newMap[k.(json.Number)] = v
-			}
-			result[fieldName] = newMap
-		case int32:
-			newMap := make(map[int32]interface{})
-			for k, v := range mapData {
-				newMap[k.(int32)] = v
-			}
-			result[fieldName] = newMap
-		case int64:
-			newMap := make(map[int64]interface{})
-			for k, v := range mapData {
-				newMap[k.(int64)] = v
-			}
-			result[fieldName] = newMap
-		default:
-			return nil, fmt.Errorf("unsupported map key type %T", key)
-		}
-	}
+    // Add collected maps to result
+    for fieldName, mapData := range mapCollector {
+        if config.MapDecodeGenericKeys {
+            // surface as generic map when explicitly requested
+            result[fieldName] = mapData
+            continue
+        }
+        // default: restore typed maps based on key type
+        var key interface{}
+        for k := range mapData { key = k; break }
+        switch key.(type) {
+        case string:
+            newMap := make(map[string]interface{})
+            for k, v := range mapData {
+                newMap[k.(string)] = v
+            }
+            result[fieldName] = newMap
+        case json.Number:
+            newMap := make(map[json.Number]interface{})
+            for k, v := range mapData {
+                newMap[k.(json.Number)] = v
+            }
+            result[fieldName] = newMap
+        case int32:
+            newMap := make(map[int32]interface{})
+            for k, v := range mapData {
+                newMap[k.(int32)] = v
+            }
+            result[fieldName] = newMap
+        case int64:
+            newMap := make(map[int64]interface{})
+            for k, v := range mapData {
+                newMap[k.(int64)] = v
+            }
+            result[fieldName] = newMap
+        default:
+            return nil, fmt.Errorf("unsupported map key type %T", key)
+        }
+    }
 
 	// Add collected repeated fields to result
 	for fieldName, repeatedData := range repeatedCollector {
@@ -176,33 +206,41 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		}
 
 		delete(result, schema.NullTrackerFieldName)
-	} else {
+	} else if config.PopulateDefaultsOnDecode {
+		// Populate defaults for absent non-repeated primitive/enum fields (optional)
 		for _, field := range msg.Fields {
 			if field.Label == schema.LabelRepeated {
 				continue
 			}
-
 			fieldName := getFieldName(field)
-			// add default values only when its not present in result
-			if _, ok := result[fieldName]; !ok {
-				if field.Type.Kind == schema.KindPrimitive { // add default for primitive types except bytes
-					result[fieldName] = getDefaultValue(field.Type.PrimitiveType)
-				} else if field.Type.Kind == schema.KindEnum { // add default value 0 for enum cases
-					enum, err := d.registry.GetEnum(field.Type.EnumType)
-					if err != nil {
-						return nil, err
-					}
-					enumDefaultStringVal, err := d.findEnumValue(enum, 0)
-					if err != nil {
-						return nil, err
-					}
-					result[fieldName] = enumDefaultStringVal
+			if _, ok := result[fieldName]; ok {
+				continue
+			}
+			switch field.Type.Kind {
+			case schema.KindPrimitive:
+				result[fieldName] = getDefaultValue(field.Type.PrimitiveType)
+			case schema.KindEnum:
+				enum, err := d.registry.GetEnum(field.Type.EnumType)
+				if err != nil {
+					return nil, err
 				}
+				enumDefaultStringVal, err := d.findEnumValue(enum, 0)
+				if err != nil {
+					return nil, err
+				}
+				result[fieldName] = enumDefaultStringVal
 			}
 		}
 	}
 
-	// when message is wrapper, empty message on wire means
+    // Attach unknown bytes only if feature is enabled
+    if config.PreserveUnknownBytesOnDecode {
+        if len(unknownBytes) > 0 {
+            result["__unknown"] = unknownBytes
+        }
+    }
+
+    // when message is wrapper, empty message on wire means
 	// two different values based on wrapped item type. If
 	// wrapped item is of repeated type, it means empty list,
 	// otherwise null.
@@ -232,7 +270,10 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			}
 			return nil, nil
 		}
-		return wrappedVal, nil
+        if config.UnwrapWrappersOnDecode {
+            return wrappedVal, nil
+        }
+        return result, nil
 	}
 	return result, nil
 }
@@ -297,6 +338,11 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 				}
 				enumStringVal, err := d.findEnumValue(enum, enumIntVal)
 				if err != nil {
+					// Optionally allow unknown enum numbers to pass through as numeric
+					if config.AllowUnknownEnumNumberDecode {
+						result = append(result, int32(enumIntVal))
+						continue
+					}
 					return nil, false, err
 				}
 				result = append(result, enumStringVal)
@@ -309,6 +355,9 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 		}
 		enumStringVal, err := d.findEnumValue(enum, enumIntVal)
 		if err != nil {
+			if config.AllowUnknownEnumNumberDecode {
+				return int32(enumIntVal), false, nil
+			}
 			return nil, false, err
 		}
 		return enumStringVal, false, nil
@@ -336,6 +385,36 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 // decodePrimitive decodes a primitive type using the appropriate decoder
 func (d *Decoder) decodePrimitive(field *schema.Field, wireType WireType) (interface{}, bool, error) {
 	primitiveType := field.Type.PrimitiveType
+	// Strict validation of wire type vs primitive type (optional)
+	if config.StrictWireTypeOnDecode {
+		switch wireType {
+		case WireBytes:
+			// bytes/string are scalar on bytes; packed scalars are bytes only for repeated
+			if primitiveType != schema.TypeString && primitiveType != schema.TypeBytes {
+				// If not a bytes/string, only valid if packed and repeated
+				if !(schema.IsPackedType(primitiveType) && field.Label == schema.LabelRepeated) {
+					return nil, false, fmt.Errorf("wire type (2) invalid for %v", primitiveType)
+				}
+			}
+		case WireVarint:
+			if !(primitiveType == schema.TypeInt32 || primitiveType == schema.TypeInt64 ||
+				primitiveType == schema.TypeUint32 || primitiveType == schema.TypeUint64 ||
+				primitiveType == schema.TypeSint32 || primitiveType == schema.TypeSint64 ||
+				primitiveType == schema.TypeBool) {
+				return nil, false, fmt.Errorf("wire type (0) invalid for %v", primitiveType)
+			}
+		case WireFixed32:
+			if !(primitiveType == schema.TypeFixed32 || primitiveType == schema.TypeSfixed32 || primitiveType == schema.TypeFloat) {
+				return nil, false, fmt.Errorf("wire type (5) invalid for %v", primitiveType)
+			}
+		case WireFixed64:
+			if !(primitiveType == schema.TypeFixed64 || primitiveType == schema.TypeSfixed64 || primitiveType == schema.TypeDouble) {
+				return nil, false, fmt.Errorf("wire type (1) invalid for %v", primitiveType)
+			}
+		default:
+			return nil, false, fmt.Errorf("unknown wire type: %d", wireType)
+		}
+	}
 	if wireType == WireBytes {
 		if schema.IsPackedType(primitiveType) {
 			// double check to ensure field is repeated

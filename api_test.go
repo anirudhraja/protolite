@@ -9,6 +9,14 @@ import (
 	"github.com/anirudhraja/protolite/wire"
 )
 
+func init() {
+	// Ensure tests continue to use typed map keys to match existing assertions.
+	wire.SetConfig(wire.Config{
+		UnwrapWrappersOnDecode: true,
+		MapDecodeGenericKeys:   false,
+	})
+}
+
 func TestProtolite_Parse(t *testing.T) {
 	proto := NewProtolite([]string{""})
 

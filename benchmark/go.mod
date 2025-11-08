@@ -1,11 +1,11 @@
 module github.com/anirudhraja/protolite/benchmark
 
-go 1.21
+go 1.23
 
 require (
 	github.com/anirudhraja/protolite v0.0.0
 	github.com/bufbuild/protocompile v0.14.1
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/protobuf v1.36.10
 )
 
 require (

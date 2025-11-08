@@ -466,11 +466,11 @@ func (r *Registry) convertProtoType(protoType string, allResolvedEntities map[st
 	case "int32":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt32}, nil
 	case "sint32":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt32}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeSint32}, nil
 	case "int64":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt64}, nil
 	case "sint64":
-		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeInt64}, nil
+		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeSint64}, nil
 	case "uint32":
 		return &schema.FieldType{Kind: schema.KindPrimitive, PrimitiveType: schema.TypeUint32}, nil
 	case "uint64":

@@ -70,7 +70,14 @@ func (md *MapDecoder) DecodeMapEntry(keyType, valueType *schema.FieldType) (inte
 		}
 	}
 
-	return key, value, nil
+    // Apply defaults if key or value missing per protobuf map semantics
+    if key == nil {
+        key = defaultValueForType(keyType)
+    }
+    if value == nil {
+        value = defaultValueForType(valueType)
+    }
+    return key, value, nil
 }
 
 // ENCODER METHODS
@@ -140,4 +147,25 @@ func (me *MapEncoder) getWireType(fieldType *schema.FieldType) WireType {
 	default:
 		return WireVarint
 	}
+}
+
+// defaultValueForType returns the protobuf default for a given field type.
+func defaultValueForType(t *schema.FieldType) interface{} {
+    switch t.Kind {
+    case schema.KindPrimitive:
+        switch t.PrimitiveType {
+        case schema.TypeBytes:
+            return []byte{}
+        default:
+            return getDefaultValue(t.PrimitiveType)
+        }
+    case schema.KindEnum:
+        // Default enum value is 0
+        return int32(0)
+    case schema.KindMessage:
+        // Empty message
+        return map[string]interface{}{}
+    default:
+        return nil
+    }
 }
