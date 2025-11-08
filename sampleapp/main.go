@@ -341,7 +341,7 @@ func main() {
 
 	fmt.Printf("📝 Posts: %d\n", len(result["posts"].([]interface{})))
 	fmt.Printf("🔔 Notifications: %d\n", len(result["notifications"].([]interface{})))
-	fmt.Printf("📊 Metadata entries: %d\n", len(result["metadata"].(map[interface{}]interface{})))
+	fmt.Printf("📊 Metadata entries: %d\n", countEntries(result["metadata"]))
 
 	fmt.Println(strings.Repeat("=", 70))
 	fmt.Println("🎉 All protobuf features working perfectly!")
@@ -504,5 +504,18 @@ func showWrapperResults(result map[string]interface{}) {
 				fmt.Printf("   %s: <not present>\n", field)
 			}
 		}
+	}
+}
+
+// countEntries returns the number of entries in a map, handling both
+// map[string]interface{} and map[interface{}]interface{} for compatibility.
+func countEntries(v interface{}) int {
+	switch m := v.(type) {
+	case map[string]interface{}:
+		return len(m)
+	case map[interface{}]interface{}:
+		return len(m)
+	default:
+		return 0
 	}
 }

@@ -36,3 +36,4 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp 
+conformance_test/results/
