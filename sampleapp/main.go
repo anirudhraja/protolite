@@ -6,9 +6,17 @@ import (
 	"strings"
 
 	"github.com/anirudhraja/protolite"
+	"github.com/anirudhraja/protolite/wire"
 )
 
 func main() {
+	// Configure decode/encode behavior for the sample app
+	wire.SetConfig(wire.Config{
+		UnwrapWrappersOnDecode:   true,
+		PopulateDefaultsOnDecode: true,
+		MapDecodeGenericKeys:     true, // keep map[interface{}]interface{} for decoded maps
+	})
+
 	proto := protolite.NewProtolite([]string{"testdata", ""})
 
 	// Load proto files - load post.proto first since user.proto imports it

@@ -1,0 +1,95 @@
+name: Conformance Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  conformance:
+    name: Run Protobuf Conformance Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout protolite repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Bazelisk (manual)
+        run: |
+          set -euo pipefail
+          VERSION="v1.27.0"
+          curl -sSLf -o bazelisk "https://github.com/bazelbuild/bazelisk/releases/download/${VERSION}/bazelisk-linux-amd64"
+          chmod +x bazelisk
+          sudo mv bazelisk /usr/local/bin/bazel
+
+      - name: Build conformance testee (Go)
+        run: |
+          set -euo pipefail
+          CONFORMANCE_DIR="conformance_test"
+          mkdir -p "${CONFORMANCE_DIR}/bin"
+          go build -o "${CONFORMANCE_DIR}/bin/conformance_testee" ./conformance_test
+
+      - name: Run conformance test suite (fail on any failure)
+        env:
+          PROTOLITE_GENERIC_MAP_KEYS: '1'
+          PROTOLITE_PRESERVE_UNKNOWN: '1'
+          PROTOLITE_JSON_WKT_INPUT: '1'
+          PROTOLITE_POPULATE_DEFAULTS_ON_DECODE: '0'
+          PROTOLITE_STRICT_WIRE: '1'
+        run: |
+          set -euo pipefail
+          CONFORMANCE_DIR="conformance_test"
+          mkdir -p "${CONFORMANCE_DIR}/bin" "${CONFORMANCE_DIR}/results"
+          # Resolve runner path (prefer checked-in location under conformance_test/bin, fallback to repo root if present)
+          RUNNER="${CONFORMANCE_DIR}/bin/conformance_test_runner"
+          if [ ! -x "${RUNNER}" ] && [ -x "./conformance_test_runner" ]; then
+            RUNNER="./conformance_test_runner"
+          fi
+          # Testee is always the freshly built Go binary
+          TESTEE="${CONFORMANCE_DIR}/bin/conformance_testee"
+          chmod +x "${RUNNER}" || true
+          # Resolve failure list (prefer new location)
+          FAILURE_LIST_FLAG=""
+          if [ -s "${CONFORMANCE_DIR}/failure_list_go.txt" ]; then
+            echo "Using failure list: ${CONFORMANCE_DIR}/failure_list_go.txt"
+            FAILURE_LIST_FLAG="--failure_list ${CONFORMANCE_DIR}/failure_list_go.txt"
+          elif [ -s "failure_list_go.txt" ]; then
+            echo "Using failure list: failure_list_go.txt"
+            FAILURE_LIST_FLAG="--failure_list failure_list_go.txt"
+          fi
+          # Clean results
+          rm -rf "${CONFORMANCE_DIR}/results" && mkdir -p "${CONFORMANCE_DIR}/results"
+          # Run (do not fail the step on runner's exit code; we'll decide based on parsed unexpected failures)
+          LOG="${CONFORMANCE_DIR}/results/summary.txt"
+          set +e
+          "${RUNNER}" ${FAILURE_LIST_FLAG} --output_dir "${CONFORMANCE_DIR}/results" "${TESTEE}" 2>&1 | tee "${LOG}"
+          RUN_EXIT=$?
+          set -e
+          # Extract unexpected failures count; default to a large number if parsing fails
+          set +e
+          UF=$(grep -Eo '[0-9]+ unexpected failures' "${LOG}" | awk '{print $1}' | tail -n1)
+          set -e
+          if [ -z "${UF:-}" ]; then
+            echo "Could not parse unexpected failures from output. Runner exit=${RUN_EXIT}"
+            exit 1
+          fi
+          echo "Unexpected failures detected: ${UF}"
+          if [ "${UF}" -ne 0 ]; then
+            echo "CI failing because there are unexpected failures."
+            exit 1
+          fi
+          echo "CI passing: 0 unexpected failures."
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-results
+          path: conformance_test/results
