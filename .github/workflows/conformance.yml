@@ -41,6 +41,7 @@ jobs:
           PROTOLITE_GENERIC_MAP_KEYS: '1'
           PROTOLITE_PRESERVE_UNKNOWN: '1'
           PROTOLITE_JSON_WKT_INPUT: '1'
+          PROTOLITE_POPULATE_DEFAULTS_ON_DECODE: '0'
           PROTOLITE_STRICT_WIRE: '1'
         run: |
           set -euo pipefail
