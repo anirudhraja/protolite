@@ -48,7 +48,8 @@ type Config struct {
 }
 
 var config = Config{
-    UnwrapWrappersOnDecode: true, // preserve prior default behavior for UTs
+    UnwrapWrappersOnDecode:   true, // preserve prior default behavior for UTs
+    PopulateDefaultsOnDecode: true, // ensure explicit defaults for scalars/enums/wrappers
 }
 
 // SetConfig sets the global wire configuration. Defaults remain zero-valued
@@ -69,8 +70,12 @@ func init() {
     if v := os.Getenv("PROTOLITE_GENERIC_MAP_KEYS"); v == "1" || v == "true" {
         config.MapDecodeGenericKeys = true
     }
-    if v := os.Getenv("PROTOLITE_POPULATE_DEFAULTS_ON_DECODE"); v == "1" || v == "true" {
-        config.PopulateDefaultsOnDecode = true
+    if v := os.Getenv("PROTOLITE_POPULATE_DEFAULTS_ON_DECODE"); v != "" {
+        if v == "1" || v == "true" {
+            config.PopulateDefaultsOnDecode = true
+        } else if v == "0" || v == "false" {
+            config.PopulateDefaultsOnDecode = false
+        }
     }
     if v := os.Getenv("PROTOLITE_STRICT_WIRE"); v == "1" || v == "true" {
         config.StrictWireTypeOnDecode = true

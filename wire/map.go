@@ -2,6 +2,10 @@ package wire
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
+	"math"
 
 	"github.com/anirudhraja/protolite/schema"
 )
@@ -149,6 +153,57 @@ func (me *MapEncoder) getWireType(fieldType *schema.FieldType) WireType {
 	}
 }
 
+// NormalizeGenericMap converts any map[K]V into map[interface{}]interface{} with keys
+// coerced to the appropriate protobuf key type based on the provided field schema.
+func (me *MapEncoder) NormalizeGenericMap(value interface{}, field *schema.Field) (map[interface{}]interface{}, error) {
+	rv := reflect.ValueOf(value)
+	if !rv.IsValid() || rv.Kind() != reflect.Map {
+		return nil, fmt.Errorf("unsupported map type: %T", value)
+	}
+	out := make(map[interface{}]interface{}, rv.Len())
+	for _, mk := range rv.MapKeys() {
+		// Convert key to appropriate type based on schema
+		var keyIface interface{}
+		switch field.Type.MapKey.PrimitiveType {
+		case schema.TypeBool:
+			if mk.Kind() == reflect.Bool { keyIface = mk.Bool() } else { keyIface = false }
+		case schema.TypeString:
+			if mk.Kind() == reflect.String { keyIface = mk.String() } else { keyIface = fmt.Sprintf("%v", mk.Interface()) }
+		case schema.TypeInt32, schema.TypeSint32, schema.TypeSfixed32:
+			keyIface = int32(mk.Convert(reflect.TypeOf(int64(0))).Int())
+		case schema.TypeInt64, schema.TypeSint64, schema.TypeSfixed64:
+			keyIface = mk.Convert(reflect.TypeOf(int64(0))).Int()
+		case schema.TypeUint32, schema.TypeFixed32:
+			keyIface = uint32(mk.Convert(reflect.TypeOf(uint64(0))).Uint())
+		case schema.TypeUint64, schema.TypeFixed64:
+			keyIface = mk.Convert(reflect.TypeOf(uint64(0))).Uint()
+		default:
+			keyIface = fmt.Sprintf("%v", mk.Interface())
+		}
+		mv := rv.MapIndex(mk).Interface()
+		// If value is a map for message type, try convert to map[string]interface{}
+		if field.Type.MapValue.Kind == schema.KindMessage {
+			if mm, ok := mv.(map[string]interface{}); ok {
+				out[keyIface] = mm
+			} else {
+				vm := reflect.ValueOf(mv)
+				if vm.IsValid() && vm.Kind() == reflect.Map && vm.Type().Key().Kind() == reflect.String {
+					inner := make(map[string]interface{}, vm.Len())
+					for _, k2 := range vm.MapKeys() {
+						inner[k2.String()] = vm.MapIndex(k2).Interface()
+					}
+					out[keyIface] = inner
+				} else {
+					out[keyIface] = mv
+				}
+			}
+		} else {
+			out[keyIface] = mv
+		}
+	}
+	return out, nil
+}
+
 // defaultValueForType returns the protobuf default for a given field type.
 func defaultValueForType(t *schema.FieldType) interface{} {
     switch t.Kind {
@@ -168,4 +223,26 @@ func defaultValueForType(t *schema.FieldType) interface{} {
     default:
         return nil
     }
+}
+
+// parseStringToInt64 parses a string to int64 for map key conversion.
+func parseStringToInt64(s string) (int64, error) {
+	if strings.ContainsAny(s, ".eE") {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil { return 0, err }
+		if f != math.Trunc(f) { return 0, fmt.Errorf("non-integer map key") }
+		return int64(f), nil
+	}
+	return strconv.ParseInt(s, 10, 64)
+}
+
+// parseStringToUint64 parses a string to uint64 for map key conversion.
+func parseStringToUint64(s string) (uint64, error) {
+	if strings.ContainsAny(s, ".eE") {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil { return 0, err }
+		if f < 0 || f != math.Trunc(f) { return 0, fmt.Errorf("non-integer map key") }
+		return uint64(f), nil
+	}
+	return strconv.ParseUint(s, 10, 64)
 }

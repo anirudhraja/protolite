@@ -234,6 +234,9 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 					return nil, err
 				}
 				result[fieldName] = enumDefaultStringVal
+			case schema.KindWrapper:
+				// Absent wrapper fields should surface as explicit nulls to preserve JSON shape
+				result[fieldName] = nil
 			}
 		}
 	}

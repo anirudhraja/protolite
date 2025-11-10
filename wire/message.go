@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
     "math"
-	"reflect"
 	"sort"
 	"strconv"
-    "strings"
 
 	"github.com/anirudhraja/protolite/schema"
 )
@@ -1011,53 +1009,10 @@ func (me *MessageEncoder) encodeMapField(value interface{}, field *schema.Field)
 			mapData[k] = val
 		}
     default:
-        // Fallback: support any map[K]V via reflection
-        rv := reflect.ValueOf(value)
-        if rv.IsValid() && rv.Kind() == reflect.Map {
-            mapData = make(map[interface{}]interface{}, rv.Len())
-            for _, mk := range rv.MapKeys() {
-                // Convert key to appropriate type based on schema
-                var keyIface interface{}
-                switch field.Type.MapKey.PrimitiveType {
-                case schema.TypeBool:
-                    if mk.Kind() == reflect.Bool { keyIface = mk.Bool() } else { keyIface = false }
-                case schema.TypeString:
-                    if mk.Kind() == reflect.String { keyIface = mk.String() } else { keyIface = fmt.Sprintf("%v", mk.Interface()) }
-                case schema.TypeInt32, schema.TypeSint32, schema.TypeSfixed32:
-                    keyIface = int32(mk.Convert(reflect.TypeOf(int64(0))).Int())
-                case schema.TypeInt64, schema.TypeSint64, schema.TypeSfixed64:
-                    keyIface = mk.Convert(reflect.TypeOf(int64(0))).Int()
-                case schema.TypeUint32, schema.TypeFixed32:
-                    keyIface = uint32(mk.Convert(reflect.TypeOf(uint64(0))).Uint())
-                case schema.TypeUint64, schema.TypeFixed64:
-                    keyIface = mk.Convert(reflect.TypeOf(uint64(0))).Uint()
-                default:
-                    keyIface = fmt.Sprintf("%v", mk.Interface())
-                }
-                mv := rv.MapIndex(mk).Interface()
-                // If value is a map for message type, try convert to map[string]interface{}
-                if field.Type.MapValue.Kind == schema.KindMessage {
-                    if mm, ok := mv.(map[string]interface{}); ok {
-                        mapData[keyIface] = mm
-                    } else {
-                        vm := reflect.ValueOf(mv)
-                        if vm.IsValid() && vm.Kind() == reflect.Map && vm.Type().Key().Kind() == reflect.String {
-                            out := make(map[string]interface{}, vm.Len())
-                            for _, k2 := range vm.MapKeys() {
-                                out[k2.String()] = vm.MapIndex(k2).Interface()
-                            }
-                            mapData[keyIface] = out
-                        } else {
-                            mapData[keyIface] = mv
-                        }
-                    }
-                } else {
-                    mapData[keyIface] = mv
-                }
-            }
-        } else {
-            return fmt.Errorf("unsupported map type: %T", value)
-        }
+        // Fallback: support any map[K]V via reflection (moved to map.go)
+        norm, err := NewMapEncoder(me.encoder).NormalizeGenericMap(value, field)
+        if err != nil { return err }
+        mapData = norm
 	}
 
 	// Use the map encoder to encode the entire map with field tags
@@ -1116,132 +1071,3 @@ func (me *MessageEncoder) findFieldByName(msg *schema.Message, fieldName string)
 	}
 	return nil
 }
-
-// toLowerCamel converts snake_case to lowerCamelCase
-func toLowerCamel(s string) string {
-    if s == "" {
-        return s
-    }
-    // Fast path: no underscore
-    hasUnderscore := false
-    for i := 0; i < len(s); i++ {
-        if s[i] == '_' { hasUnderscore = true; break }
-    }
-    if !hasUnderscore {
-        // ensure lower first char
-        if s[0] >= 'A' && s[0] <= 'Z' {
-            return string(s[0]-'A'+'a') + s[1:]
-        }
-        return s
-    }
-    out := make([]byte, 0, len(s))
-    upperNext := false
-    for i := 0; i < len(s); i++ {
-        c := s[i]
-        if c == '_' {
-            upperNext = true
-            continue
-        }
-        if len(out) == 0 {
-            // first rune lowercased
-            if c >= 'A' && c <= 'Z' { c = c - 'A' + 'a' }
-            out = append(out, c)
-            upperNext = false
-            continue
-        }
-        if upperNext {
-            if c >= 'a' && c <= 'z' { c = c - 'a' + 'A' }
-            upperNext = false
-        }
-        out = append(out, c)
-    }
-    return string(out)
-}
-
-// Helpers to coerce JSON inputs to integers (accept exponent/float forms if integral)
-func coerceToInt64(v interface{}) (int64, error) {
-    switch t := v.(type) {
-    case int64:
-        return t, nil
-    case int32:
-        return int64(t), nil
-    case json.Number:
-        // Try integer first
-        if iv, err := t.Int64(); err == nil { return iv, nil }
-        // Fallback: parse as float and check integral
-        f, err := strconv.ParseFloat(t.String(), 64)
-        if err != nil { return 0, err }
-        if f != math.Trunc(f) { return 0, fmt.Errorf("non-integer numeric for integer field") }
-        return int64(f), nil
-    case float64:
-        if t != math.Trunc(t) { return 0, fmt.Errorf("non-integer numeric for integer field") }
-        return int64(t), nil
-    case string:
-        // allow explicit integer strings
-        if strings.ContainsAny(t, ".eE") {
-            f, err := strconv.ParseFloat(t, 64)
-            if err != nil { return 0, err }
-            if f != math.Trunc(f) { return 0, fmt.Errorf("non-integer numeric for integer field") }
-            return int64(f), nil
-        }
-        iv, err := strconv.ParseInt(t, 10, 64)
-        if err != nil { return 0, err }
-        return iv, nil
-    default:
-        return 0, fmt.Errorf("expected integer-like, got %T", v)
-    }
-}
-
-func coerceToUint64(v interface{}) (uint64, error) {
-    switch t := v.(type) {
-    case uint64:
-        return t, nil
-    case uint32:
-        return uint64(t), nil
-    case json.Number:
-        if uv, err := strconv.ParseUint(t.String(), 10, 64); err == nil { return uv, nil }
-        f, err := strconv.ParseFloat(t.String(), 64)
-        if err != nil { return 0, err }
-        if f < 0 || f != math.Trunc(f) { return 0, fmt.Errorf("non-integer numeric for unsigned field") }
-        return uint64(f), nil
-    case float64:
-        if t < 0 || t != math.Trunc(t) { return 0, fmt.Errorf("non-integer numeric for unsigned field") }
-        return uint64(t), nil
-    case string:
-        if strings.ContainsAny(t, ".eE") {
-            f, err := strconv.ParseFloat(t, 64)
-            if err != nil { return 0, err }
-            if f < 0 || f != math.Trunc(f) { return 0, fmt.Errorf("non-integer numeric for unsigned field") }
-            return uint64(f), nil
-        }
-        uv, err := strconv.ParseUint(t, 10, 64)
-        if err != nil { return 0, err }
-        return uv, nil
-    default:
-        return 0, fmt.Errorf("expected unsigned-integer-like, got %T", v)
-    }
-}
-
-func parseStringToInt64(s string) (int64, error) {
-    if strings.ContainsAny(s, ".eE") {
-        f, err := strconv.ParseFloat(s, 64)
-        if err != nil { return 0, err }
-        if f != math.Trunc(f) { return 0, fmt.Errorf("non-integer map key") }
-        return int64(f), nil
-    }
-    return strconv.ParseInt(s, 10, 64)
-}
-
-func parseStringToUint64(s string) (uint64, error) {
-    if strings.ContainsAny(s, ".eE") {
-        f, err := strconv.ParseFloat(s, 64)
-        if err != nil { return 0, err }
-        if f < 0 || f != math.Trunc(f) { return 0, fmt.Errorf("non-integer map key") }
-        return uint64(f), nil
-    }
-    return strconv.ParseUint(s, 10, 64)
-}
-
-// (unused helpers removed)
-
-// (moved WKT JSON helpers to wkt_json_input.go)
