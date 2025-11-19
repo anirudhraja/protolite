@@ -2,6 +2,7 @@ package wire
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/anirudhraja/protolite/schema"
 )
@@ -70,6 +71,13 @@ func (md *MapDecoder) DecodeMapEntry(keyType, valueType *schema.FieldType) (inte
 		}
 	}
 
+    // Apply defaults if key or value missing per protobuf map semantics
+    if key == nil {
+        key = defaultValueForType(keyType)
+    }
+    if value == nil {
+        value = defaultValueForType(valueType)
+    }
 	return key, value, nil
 }
 
@@ -103,16 +111,22 @@ func (me *MapEncoder) EncodeMapEntry(key, value interface{}, keyType, valueType 
 	return nil
 }
 
-// EncodeMap encodes a complete map
-func (me *MapEncoder) EncodeMap(mapData map[interface{}]interface{}, keyType, valueType *schema.FieldType, fieldNumber int32) error {
-	for key, value := range mapData {
+// EncodeMap encodes a complete map - handles typed maps directly via reflection
+func (me *MapEncoder) EncodeMap(mapData interface{}, keyType, valueType *schema.FieldType, fieldNumber int32) error {
+	rv := reflect.ValueOf(mapData)
+	if !rv.IsValid() || rv.Kind() != reflect.Map {
+		return fmt.Errorf("EncodeMap requires a map, got %T", mapData)
+	}
+
+	iter := rv.MapRange()
+	for iter.Next() {
 		// Encode field tag
 		ve := NewVarintEncoder(me.encoder)
 		tag := MakeTag(FieldNumber(fieldNumber), WireBytes)
 		ve.EncodeVarint(uint64(tag))
 
 		// Encode map entry
-		if err := me.EncodeMapEntry(key, value, keyType, valueType); err != nil {
+		if err := me.EncodeMapEntry(iter.Key().Interface(), iter.Value().Interface(), keyType, valueType); err != nil {
 			return err
 		}
 	}
@@ -140,4 +154,25 @@ func (me *MapEncoder) getWireType(fieldType *schema.FieldType) WireType {
 	default:
 		return WireVarint
 	}
+}
+
+// defaultValueForType returns the protobuf default for a given field type.
+func defaultValueForType(t *schema.FieldType) interface{} {
+    switch t.Kind {
+    case schema.KindPrimitive:
+        switch t.PrimitiveType {
+        case schema.TypeBytes:
+            return []byte{}
+        default:
+            return getDefaultValue(t.PrimitiveType)
+        }
+    case schema.KindEnum:
+        // Default enum value is 0
+        return int32(0)
+    case schema.KindMessage:
+        // Empty message
+        return map[string]interface{}{}
+    default:
+        return nil
+    }
 }

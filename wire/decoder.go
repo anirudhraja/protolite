@@ -57,6 +57,16 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 
 		fieldNumber, wireType := ParseTag(Tag(tag))
 
+        // Field number 0 is illegal in protobuf
+        if fieldNumber == 0 {
+            return nil, fmt.Errorf("illegal field number 0")
+        }
+		switch wireType {
+		case WireVarint, WireFixed64, WireBytes, WireFixed32:
+			// do nothing for known/allowed types
+		default:
+			return nil, fmt.Errorf("unknown wire type: %d", wireType)
+		}
 		// Find field in schema
 		var field *schema.Field
 		for _, f := range msg.Fields {
@@ -119,6 +129,10 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			key = k
 			break
 		}
+        // If the map is empty continue to avoid nil-key errors
+        if key == nil {
+            continue
+		}
 		switch key.(type) {
 		case string:
 			newMap := make(map[string]interface{})
@@ -142,6 +156,24 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 			newMap := make(map[int64]interface{})
 			for k, v := range mapData {
 				newMap[k.(int64)] = v
+			}
+			result[fieldName] = newMap
+        case uint32:
+            newMap := make(map[uint32]interface{})
+            for k, v := range mapData {
+                newMap[k.(uint32)] = v
+            }
+            result[fieldName] = newMap
+        case uint64:
+            newMap := make(map[uint64]interface{})
+            for k, v := range mapData {
+                newMap[k.(uint64)] = v
+            }
+            result[fieldName] = newMap
+        case bool:
+            newMap := make(map[bool]interface{})
+            for k, v := range mapData {
+                newMap[k.(bool)] = v
 			}
 			result[fieldName] = newMap
 		default:
@@ -176,7 +208,7 @@ func (d *Decoder) DecodeWithSchema(msg *schema.Message) (interface{}, error) {
 		}
 
 		delete(result, schema.NullTrackerFieldName)
-	} else {
+	} else if config.FillMissingScalarDefaultsOnDecode{
 		for _, field := range msg.Fields {
 			if field.Label == schema.LabelRepeated {
 				continue
@@ -280,38 +312,43 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 		if err != nil {
 			return nil, false, err
 		}
-		vd := NewVarintDecoder(d)
-		// get the length first if its repeated enum
-		if field.Label == schema.LabelRepeated {
-			length, err := vd.DecodeVarint()
+	vd := NewVarintDecoder(d)
+	// Check if this is packed (length-delimited) or unpacked (single varint)
+	// Packed: WireBytes (type 2) - read length, then all values
+	// Unpacked: WireVarint (type 0) - read single value, main decoder accumulates
+	if field.Label == schema.LabelRepeated && wireType == WireBytes {
+		// Packed repeated enum: read length, then decode all values
+		length, err := vd.DecodeVarint()
+		if err != nil {
+			return nil, false, err
+		}
+		// one by one read the bytes and find the relevant field name for it.
+		end := d.pos + int(length)
+		for d.pos < end {
+			vd := NewVarintDecoder(d)
+			enumIntVal, err := vd.DecodeEnum()
 			if err != nil {
 				return nil, false, err
 			}
-			// one by one read the bytes and find the relevant field name for it.
-			end := d.pos + int(length)
-			for d.pos < end {
-				vd := NewVarintDecoder(d)
-				enumIntVal, err := vd.DecodeEnum()
-				if err != nil {
-					return nil, false, err
-				}
-				enumStringVal, err := d.findEnumValue(enum, enumIntVal)
-				if err != nil {
-					return nil, false, err
-				}
-				result = append(result, enumStringVal)
-			}
-			return result, true, nil
-		}
-		enumIntVal, err := vd.DecodeEnum()
-		if err != nil {
-			return nil, false, err
-		}
 		enumStringVal, err := d.findEnumValue(enum, enumIntVal)
 		if err != nil {
-			return nil, false, err
+			result = append(result, fmt.Sprintf("%d", enumIntVal))
+			continue
 		}
-		return enumStringVal, false, nil
+		result = append(result, enumStringVal)
+		}
+		return result, true, nil
+	}
+	// Single enum value (either non-repeated, or unpacked repeated)
+	enumIntVal, err := vd.DecodeEnum()
+	if err != nil {
+		return nil, false, err
+	}
+	enumStringVal, err := d.findEnumValue(enum, enumIntVal)
+	if err != nil {
+		return fmt.Sprintf("%d", enumIntVal), false, nil
+	}
+	return enumStringVal, false, nil
 
 	case schema.KindMap:
 		mapDecoder := NewMapDecoder(d)

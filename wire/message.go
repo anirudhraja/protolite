@@ -570,7 +570,8 @@ func (me *MessageEncoder) encodePrimitiveField(value interface{}, primitiveType 
 			}
 			v = int32(val)
 		}
-		return NewFixedEncoder(encoder).EncodeSfixed32(v)
+		NewVarintEncoder(encoder).EncodeSint32(v)
+		return nil
 	case schema.TypeSint64:
 		v, ok := value.(int64)
 		if !ok {
@@ -584,7 +585,8 @@ func (me *MessageEncoder) encodePrimitiveField(value interface{}, primitiveType 
 			}
 			v = val
 		}
-		return NewFixedEncoder(encoder).EncodeSfixed64(v)
+		NewVarintEncoder(encoder).EncodeSint64(v)
+		return nil
 	default:
 		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
 	}
@@ -627,28 +629,58 @@ func (me *MessageEncoder) encodeMessageField(value interface{}, messageTypeName 
 
 // encodeEnumField encodes an enum field
 func (me *MessageEncoder) encodeEnumField(value interface{}, fieldType schema.FieldType) error {
-	enumValue, ok := value.(string)
-	if !ok {
-		// check if the enum value is a JSON Number
-		enumValueInJsonNumber, isJsonNumber := value.(json.Number)
-		if !isJsonNumber {
-			return fmt.Errorf("enum value must be string for %s field", fieldType.EnumType)
-		}
-		enumValue = enumValueInJsonNumber.String()
-	}
+	// Fetch enum descriptor for name lookups
 	enum, err := me.encoder.registry.GetEnum(fieldType.EnumType)
 	if err != nil {
 		return fmt.Errorf("unknown enum %s received for enum, with value %v", fieldType.EnumType, value)
 	}
-	for _, en := range enum.Values {
-		if en.Name == enumValue || en.JsonName == enumValue {
-			ve := NewVarintEncoder(me.encoder)
-			ve.EncodeEnum(en.Number)
+	// Accept strings (names) and numerics. Unknown numerics are preserved.
+	switch v := value.(type) {
+	case string:
+		// fall through to normalized string handling below
+		enumValue := v
+		for _, en := range enum.Values {
+			if en.Name == enumValue || en.JsonName == enumValue {
+				NewVarintEncoder(me.encoder).EncodeEnum(en.Number)
+				return nil
+			}
+		}
+		if n, err := strconv.ParseInt(enumValue, 10, 32); err == nil {
+			NewVarintEncoder(me.encoder).EncodeEnum(int32(n))
 			return nil
 		}
+		return fmt.Errorf("cannot find field value %s in the enum %v", enumValue, enum.Values)
+	case json.Number:
+		enumValue := v.String()
+		for _, en := range enum.Values {
+			if en.Name == enumValue || en.JsonName == enumValue {
+				NewVarintEncoder(me.encoder).EncodeEnum(en.Number)
+				return nil
+			}
+		}
+		if n, err := strconv.ParseInt(enumValue, 10, 32); err == nil {
+			NewVarintEncoder(me.encoder).EncodeEnum(int32(n))
+			return nil
+		}
+		return fmt.Errorf("cannot find field value %s in the enum %v", enumValue, enum.Values)
+	case int32:
+		NewVarintEncoder(me.encoder).EncodeEnum(v)
+		return nil
+	case int64:
+		NewVarintEncoder(me.encoder).EncodeEnum(int32(v))
+		return nil
+	case int:
+		NewVarintEncoder(me.encoder).EncodeEnum(int32(v))
+		return nil
+	case uint32:
+		NewVarintEncoder(me.encoder).EncodeEnum(int32(v))
+		return nil
+	case uint64:
+		NewVarintEncoder(me.encoder).EncodeEnum(int32(v))
+		return nil
+	default:
+		return fmt.Errorf("enum value must be string or number for %s field, got %T", fieldType.EnumType, value)
 	}
-	return fmt.Errorf("cannot find field value %s in the enum %v", enumValue, enum.Values)
-
 }
 
 // encodeWrapperField encodes a wrapper field
@@ -848,8 +880,22 @@ func (me *MessageEncoder) encodeWrapperField(value interface{}, wrapperType sche
 		if err != nil {
 			return err
 		}
-		val, ok := actualValue.([]byte)
-		if !ok {
+		var val []byte
+		switch vv := actualValue.(type) {
+		case []byte:
+			val = vv
+		case string:
+			// accept both std and url base64
+			if vv == "" { val = []byte{} } else {
+				if b, err := base64.StdEncoding.DecodeString(vv); err == nil {
+					val = b
+				} else if b2, err2 := base64.URLEncoding.DecodeString(vv); err2 == nil {
+					val = b2
+				} else {
+					return fmt.Errorf("invalid base64 for bytes wrapper")
+				}
+			}
+		default:
 			return fmt.Errorf("unexpected type for bytes: %T", actualValue)
 		}
 		tag := MakeTag(FieldNumber(1), WireBytes)
@@ -867,69 +913,11 @@ func (me *MessageEncoder) encodeWrapperField(value interface{}, wrapperType sche
 	return nil
 }
 
-// encodeMapField encodes a map field
+// encodeMapField encodes a map field - passes typed maps directly to encoder
 func (me *MessageEncoder) encodeMapField(value interface{}, field *schema.Field) error {
-	var mapData map[interface{}]interface{}
-
-	// Handle different map types
-	switch v := value.(type) {
-	case map[interface{}]interface{}:
-		mapData = v
-	case map[string]interface{}:
-		mapData = make(map[interface{}]interface{})
-		for k, val := range v {
-			// If the map value is a message type, encode it first
-			if field.Type.MapValue.Kind == schema.KindMessage {
-				if messageData, ok := val.(map[string]interface{}); ok {
-					// Get the message schema
-					messageSchema, err := me.encoder.registry.GetMessage(field.Type.MapValue.MessageType)
-					if err != nil {
-						return fmt.Errorf("failed to get message schema for %s: %v", field.Type.MapValue.MessageType, err)
-					}
-
-					// Encode the message
-					nestedEncoder := NewEncoder()
-					nestedEncoder.registry = me.encoder.registry
-					nestedMessageEncoder := NewMessageEncoder(nestedEncoder)
-					if err := nestedMessageEncoder.EncodeMessage(messageData, messageSchema); err != nil {
-						return err
-					}
-
-					mapData[k] = nestedEncoder.Bytes()
-				} else {
-					mapData[k] = val
-				}
-			} else {
-				mapData[k] = val
-			}
-		}
-	case map[string]string:
-		mapData = make(map[interface{}]interface{})
-		for k, val := range v {
-			mapData[k] = val
-		}
-	case map[string]int64:
-		mapData = make(map[interface{}]interface{})
-		for k, val := range v {
-			mapData[k] = val
-		}
-	case map[int32]string:
-		mapData = make(map[interface{}]interface{})
-		for k, val := range v {
-			mapData[k] = val
-		}
-	case map[string]float64:
-		mapData = make(map[interface{}]interface{})
-		for k, val := range v {
-			mapData[k] = val
-		}
-	default:
-		return fmt.Errorf("unsupported map type: %T", value)
-	}
-
 	// Use the map encoder to encode the entire map with field tags
 	mapEncoder := NewMapEncoder(me.encoder)
-	return mapEncoder.EncodeMap(mapData, field.Type.MapKey, field.Type.MapValue, field.Number)
+	return mapEncoder.EncodeMap(value, field.Type.MapKey, field.Type.MapValue, field.Number)
 }
 
 // UTILITY METHODS
@@ -964,13 +952,13 @@ func (me *MessageEncoder) getWireType(fieldType *schema.FieldType) WireType {
 // findFieldByName finds a field by name in a message
 func (me *MessageEncoder) findFieldByName(msg *schema.Message, fieldName string) *schema.Field {
 	for _, field := range msg.Fields {
-		if field.Name == fieldName || field.JsonName == fieldName {
+		if field.Name == fieldName || field.JsonName == fieldName || toLowerCamel(field.Name) == fieldName {
 			return field
 		}
 	}
 	for _, oneOf := range msg.OneofGroups {
 		for _, field := range oneOf.Fields {
-			if field.Name == fieldName || field.JsonName == fieldName {
+			if field.Name == fieldName || field.JsonName == fieldName || toLowerCamel(field.Name) == fieldName {
 				return field
 			}
 		}

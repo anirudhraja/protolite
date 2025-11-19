@@ -341,7 +341,7 @@ func main() {
 
 	fmt.Printf("📝 Posts: %d\n", len(result["posts"].([]interface{})))
 	fmt.Printf("🔔 Notifications: %d\n", len(result["notifications"].([]interface{})))
-	fmt.Printf("📊 Metadata entries: %d\n", len(result["metadata"].(map[interface{}]interface{})))
+	fmt.Printf("📊 Metadata entries: %d\n", len(result["metadata"].(map[string]interface{})))
 
 	fmt.Println(strings.Repeat("=", 70))
 	fmt.Println("🎉 All protobuf features working perfectly!")
