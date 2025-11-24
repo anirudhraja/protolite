@@ -585,8 +585,7 @@ func (me *MessageEncoder) encodePrimitiveField(value interface{}, primitiveType 
 			}
 			v = val
 		}
-		NewVarintEncoder(encoder).EncodeSint64(v)
-		return nil
+		return NewFixedEncoder(encoder).EncodeSfixed64(v)
 	default:
 		return fmt.Errorf("unsupported primitive type: %s", primitiveType)
 	}
