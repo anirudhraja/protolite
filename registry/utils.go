@@ -119,6 +119,11 @@ func (r *Registry) processProtoBytes(identifier string, protoBytes []byte, dfs f
 				return err
 			}
 			protoFileEntity.imports = append(protoFileEntity.imports, fullImportPath)
+			publicImports, err := r.addAllPublicImports(fullImportPath)
+			if err != nil {
+				return err
+			}
+			protoFileEntity.imports = append(protoFileEntity.imports, publicImports...)
 			if err = dfs(fullImportPath); err != nil {
 				return err
 			}
@@ -151,6 +156,47 @@ func (r *Registry) findIfProtoExists(protoPath string) (string, error) {
 		return "", fmt.Errorf("is not a .proto file %s %w", fullPath, err)
 	}
 	return fullProtoPath, nil
+}
+
+// addAllPublicImports visits all imports defined in the file and collects
+// those with public modifier, returning their full resolved paths
+func (r *Registry) addAllPublicImports(identifier string) ([]string, error) {
+	parsedBody, ok := r.parsedProtoBody[identifier]
+	if !ok {
+		// Parse the body and add it to r.parsedProtoBody
+		protoBytes, err := os.ReadFile(identifier)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file: %w", err)
+		}
+		buf := bytes.NewBuffer(protoBytes)
+		parsedBody, err = protoparser.Parse(buf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse proto: %w", err)
+		}
+	}
+	publicImports := make([]string, 0)
+
+	// Visit all imports in the file
+	for _, body := range parsedBody.ProtoBody {
+		switch b := body.(type) {
+		case *protoparserparser.Import:
+			// Check if this import has public modifier
+			if b.Modifier == protoparserparser.ImportModifierPublic {
+				importPath := b.Location
+				importPath = strings.Trim(importPath, `"`)
+
+				// Resolve the full import path
+				fullImportPath, err := r.findIfProtoExists(importPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to resolve public import path %s: %w", importPath, err)
+				}
+
+				publicImports = append(publicImports, fullImportPath)
+			}
+		}
+	}
+
+	return publicImports, nil
 }
 
 /*
