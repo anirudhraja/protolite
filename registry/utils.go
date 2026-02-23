@@ -38,18 +38,19 @@ func (r *Registry) traverseProtoWithDFS(initialIdentifier string, initialProtoBy
 	visited := make(map[string]struct{}) // to make sure we don't end up in a loop
 	result := make([]string, 0)
 
-	// Create the DFS function that processes a proto file from the file system
-	var dfs func(protoFile string) error
-	dfs = func(protoFile string) error {
+	// Create the DFS function that processes a proto file from the file system.
+	// Returns (public imports from that file, error).
+	var dfs func(protoFile string) ([]string, error)
+	dfs = func(protoFile string) ([]string, error) {
 		// Skip if already visited in this traversal
 		if _, ok := visited[protoFile]; ok {
-			return nil
+			return r.publicImports[protoFile], nil
 		}
 
 		// Skip if already processed in registry from a previous LoadSchema call
 		if r.parsedProtoBody != nil {
 			if _, ok := r.parsedProtoBody[protoFile]; ok {
-				return nil
+				return r.publicImports[protoFile], nil
 			}
 		}
 
@@ -59,15 +60,11 @@ func (r *Registry) traverseProtoWithDFS(initialIdentifier string, initialProtoBy
 		// Read proto bytes from file
 		protoBytes, err := os.ReadFile(protoFile)
 		if err != nil {
-			return fmt.Errorf("failed to read file: %w", err)
+			return nil, fmt.Errorf("failed to read file: %w", err)
 		}
 
 		// Process the proto bytes and recursively handle imports
-		if err := r.processProtoBytes(protoFile, protoBytes, dfs); err != nil {
-			return err
-		}
-
-		return nil
+		return r.processProtoBytes(protoFile, protoBytes, dfs)
 	}
 
 	// Check if initial proto already exists in registry from previous LoadSchema call
@@ -83,15 +80,16 @@ func (r *Registry) traverseProtoWithDFS(initialIdentifier string, initialProtoBy
 	result = append(result, initialIdentifier)
 
 	// Process the initial proto bytes and trigger DFS for its imports
-	if err := r.processProtoBytes(initialIdentifier, initialProtoBytes, dfs); err != nil {
+	if _, err := r.processProtoBytes(initialIdentifier, initialProtoBytes, dfs); err != nil {
 		return nil, err
 	}
 
 	return result, nil
 }
 
-// processProtoBytes is a common method to parse proto bytes and handle imports
-func (r *Registry) processProtoBytes(identifier string, protoBytes []byte, dfs func(string) error) error {
+// processProtoBytes is a common method to parse proto bytes and handle imports.
+// Returns (public import paths from this file, error).
+func (r *Registry) processProtoBytes(identifier string, protoBytes []byte, dfs func(string) ([]string, error)) ([]string, error) {
 	protoFileEntity := &protoFileEntity{
 		imports: make([]string, 0),
 	}
@@ -100,10 +98,11 @@ func (r *Registry) processProtoBytes(identifier string, protoBytes []byte, dfs f
 	buf := bytes.NewBuffer(protoBytes)
 	parsedBody, err := protoparser.Parse(buf)
 	if err != nil {
-		return fmt.Errorf("failed to parse proto: %w", err)
+		return nil, fmt.Errorf("failed to parse proto: %w", err)
 	}
 	r.parsedProtoBody[identifier] = parsedBody
 
+	publicImports := make([]string, 0)
 	// Process imports
 	for _, body := range parsedBody.ProtoBody {
 		switch b := body.(type) {
@@ -116,16 +115,22 @@ func (r *Registry) processProtoBytes(identifier string, protoBytes []byte, dfs f
 			}
 			fullImportPath, err := r.findIfProtoExists(importPath)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			protoFileEntity.imports = append(protoFileEntity.imports, fullImportPath)
-			if err = dfs(fullImportPath); err != nil {
-				return err
+			transitivePublicImports, err := dfs(fullImportPath)
+			if err != nil {
+				return nil, err
+			}
+			protoFileEntity.imports = append(protoFileEntity.imports, transitivePublicImports...)
+			if b.Modifier == protoparserparser.ImportModifierPublic {
+				publicImports = append(publicImports, fullImportPath)
 			}
 		}
 	}
 	r.protoEntities[identifier] = protoFileEntity
-	return nil
+	r.publicImports[identifier] = publicImports
+	return publicImports, nil
 }
 
 func (r *Registry) findIfProtoExists(protoPath string) (string, error) {
