@@ -20,6 +20,7 @@ type Registry struct {
 	protoEntities    map[string]*protoFileEntity         // for each proto store the entities so its easy to refer
 	parsedProtoBody  map[string]*protoparserparser.Proto // just a cache to avoid parsing proto body
 	ProtoDirectories []string                            // list of directories to search for the imported protos
+	publicImports    map[string][]string                 // for each proto store the public imports
 }
 
 // preprocessing the proto file to store the proto entities
@@ -68,6 +69,9 @@ func (r *Registry) initializeRegistry() {
 	}
 	if r.parsedProtoBody == nil {
 		r.parsedProtoBody = map[string]*protoparserparser.Proto{}
+	}
+	if r.publicImports == nil {
+		r.publicImports = map[string][]string{}
 	}
 	if r.repo == nil {
 		r.repo = &schema.ProtoRepo{
@@ -206,7 +210,7 @@ func (r *Registry) loadSingleProtoFile(filePath string) (*schema.ProtoFile, erro
 		case *protoparserparser.Service:
 			service, err := r.processService(b)
 			if err != nil {
-				return nil,fmt.Errorf("Service %s processing failed with err: %v", b.ServiceName, err)
+				return nil, fmt.Errorf("Service %s processing failed with err: %v", b.ServiceName, err)
 			}
 			protoFile.Services = append(protoFile.Services, service)
 
@@ -618,13 +622,13 @@ func (r *Registry) buildServices(protoFile *schema.ProtoFile) error {
 	for _, service := range protoFile.Services {
 		for _, method := range service.Methods {
 			// Check if input type exists
-			if _, err := r.GetMessage(protoFile.Package+"."+method.InputType); err != nil {
+			if _, err := r.GetMessage(protoFile.Package + "." + method.InputType); err != nil {
 				return fmt.Errorf("service %s method %s: input type %s not found,error: %v",
 					service.Name, method.Name, method.InputType, err)
 			}
 
 			// Check if output type exists
-			if _, err := r.GetMessage(protoFile.Package+"."+method.OutputType); err != nil {
+			if _, err := r.GetMessage(protoFile.Package + "." + method.OutputType); err != nil {
 				return fmt.Errorf("service %s method %s: output type %s not found,error: %v",
 					service.Name, method.Name, method.OutputType, err)
 			}

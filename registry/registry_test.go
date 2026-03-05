@@ -133,6 +133,154 @@ service TestService {
 	}
 }
 
+// TestLoadSchema_PublicImport verifies that "import public" causes transitive
+// imports to be visible: root imports mid, mid has "import public leaf", so
+// root's entity imports should include leaf and types from leaf should resolve.
+func TestLoadSchema_PublicImport(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "proto_public_import_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	leafContent := `syntax = "proto3";
+package leaf.pkg;
+
+message LeafMessage {
+  string id = 1;
+}
+`
+	midContent := `syntax = "proto3";
+package mid.pkg;
+
+import public "leaf.proto";
+
+message MidMessage {
+  string id = 1;
+}
+`
+	rootContent := `syntax = "proto3";
+package root.pkg;
+
+import "mid.proto";
+
+message RootMessage {
+  mid.pkg.MidMessage mid = 1;
+  leaf.pkg.LeafMessage leaf = 2;
+}
+`
+	parentContent := `syntax = "proto3";
+package parent.pkg;
+
+import "root.proto";
+
+message ParentMessage {
+  root.pkg.RootMessage root = 1;
+}
+`
+
+	leafPath := filepath.Join(tmpDir, "leaf.proto")
+	midPath := filepath.Join(tmpDir, "mid.proto")
+	rootPath := filepath.Join(tmpDir, "root.proto")
+	parentPath := filepath.Join(tmpDir, "parent.proto")
+	for _, pair := range []struct {
+		path string
+		body string
+	}{
+		{leafPath, leafContent},
+		{midPath, midContent},
+		{rootPath, rootContent},
+		{parentPath, parentContent},
+	} {
+		if err := os.WriteFile(pair.path, []byte(pair.body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	registry := NewRegistry([]string{tmpDir})
+	file, err := os.Open(parentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	err = registry.LoadSchema(file, parentPath)
+	if err != nil {
+		t.Fatalf("LoadSchema failed: %v", err)
+	}
+
+	// All four packages should be loaded (parent, root, mid, leaf)
+	if len(registry.repo.ProtoFiles) != 4 {
+		t.Errorf("expected 4 proto files loaded, got %d", len(registry.repo.ProtoFiles))
+	}
+
+	// Explicit check: entity imports for each proto file
+	// Parent has one (root); leaf has none; mid has one (leaf); root has two (mid + leaf from public import)
+	parentEnt, ok := registry.protoEntities[parentPath]
+	if !ok {
+		t.Fatal("no proto entity for parent")
+	}
+	if n := len(parentEnt.imports); n != 1 {
+		t.Errorf("parent should have 1 import (root only), got %d: %v", n, parentEnt.imports)
+	} else if parentEnt.imports[0] != rootPath {
+		t.Errorf("parent import should be root %q, got %q", rootPath, parentEnt.imports[0])
+	}
+
+	leafEnt, ok := registry.protoEntities[leafPath]
+	if !ok {
+		t.Fatal("no proto entity for leaf")
+	}
+	if n := len(leafEnt.imports); n != 0 {
+		t.Errorf("leaf should have 0 imports, got %d: %v", n, leafEnt.imports)
+	}
+
+	midEnt, ok := registry.protoEntities[midPath]
+	if !ok {
+		t.Fatal("no proto entity for mid")
+	}
+	if n := len(midEnt.imports); n != 1 {
+		t.Errorf("mid should have 1 import, got %d: %v", n, midEnt.imports)
+	} else if midEnt.imports[0] != leafPath {
+		t.Errorf("mid import should be leaf %q, got %q", leafPath, midEnt.imports[0])
+	}
+
+	rootEnt, ok := registry.protoEntities[rootPath]
+	if !ok {
+		t.Fatal("no proto entity for root")
+	}
+	if n := len(rootEnt.imports); n != 2 {
+		t.Errorf("root should have 2 imports (mid + leaf), got %d: %v", n, rootEnt.imports)
+	} else {
+		rootImports := make(map[string]struct{})
+		for _, p := range rootEnt.imports {
+			rootImports[p] = struct{}{}
+		}
+		if _, ok := rootImports[midPath]; !ok {
+			t.Errorf("root imports should include mid %q, got %v", midPath, rootEnt.imports)
+		}
+		if _, ok := rootImports[leafPath]; !ok {
+			t.Errorf("root imports should include leaf %q (via public import), got %v", leafPath, rootEnt.imports)
+		}
+	}
+
+	// Types from the publicly imported file (leaf) must be resolvable from root
+	_, err = registry.GetMessage("leaf.pkg.LeafMessage")
+	if err != nil {
+		t.Errorf("GetMessage(leaf.pkg.LeafMessage) failed (public import should expose leaf): %v", err)
+	}
+	_, err = registry.GetMessage("mid.pkg.MidMessage")
+	if err != nil {
+		t.Errorf("GetMessage(mid.pkg.MidMessage) failed: %v", err)
+	}
+	_, err = registry.GetMessage("root.pkg.RootMessage")
+	if err != nil {
+		t.Errorf("GetMessage(root.pkg.RootMessage) failed: %v", err)
+	}
+	_, err = registry.GetMessage("parent.pkg.ParentMessage")
+	if err != nil {
+		t.Errorf("GetMessage(parent.pkg.ParentMessage) failed: %v", err)
+	}
+}
 
 func TestGetFullName(t *testing.T) {
 	registry := NewRegistry([]string{""})
