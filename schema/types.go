@@ -47,6 +47,7 @@ type Field struct {
 	JsonName     string     `json:"json_name"`     // JSON field name
 	OneofIndex   int32      `json:"oneof_index"`   // oneof group index (-1 if not in oneof)
 	JSONString   bool       `json:"json_string"`   // when set raw json string is used to transport gql scalars on wire.
+	CustomType   bool       `json:"custom_type"`   // when set (via (gogoproto.customtype)) a bytes field carries a JSON-encoded value: json.Marshal on encode, json.Unmarshal on decode.
 }
 
 // Oneof represents a oneof group

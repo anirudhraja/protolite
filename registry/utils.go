@@ -18,6 +18,7 @@ const (
 	optionWrapper        = "wrapper"
 	optionShowNull       = "show_null"
 	optionTrackNull      = "track_null"
+	optionCustomType     = "(gogoproto.customtype)"
 )
 
 // getAllProtoInfoFromReader uses DFS to fetch proto info starting from a reader, with dependent protos loaded from files
