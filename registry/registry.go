@@ -315,9 +315,13 @@ func (r *Registry) processMessage(message *protoparserparser.Message, allResolve
 					Type:       *fieldType,
 					JsonName:   findJSONName(field.FieldOptions),
 					JSONString: isJSONString(field.FieldOptions),
+					CustomType: isCustomType(field.FieldOptions),
 				}
 				if f.JSONString && (f.Type.Kind != schema.KindWrapper || f.Type.WrapperType != schema.WrapperStringValue) {
 					return nil, fmt.Errorf("expected %s type at %s for json_string, got %+v", schema.WrapperStringValue, f.Name, f.Type)
+				}
+				if f.CustomType && (f.Type.Kind != schema.KindPrimitive || f.Type.PrimitiveType != schema.TypeBytes) {
+					return nil, fmt.Errorf("expected %s type at %s for %s, got %+v", schema.TypeBytes, f.Name, optionCustomType, f.Type)
 				}
 				oneOfFields = append(oneOfFields, f)
 			}
@@ -376,9 +380,13 @@ func (r *Registry) processField(field *protoparserparser.Field, resolvedEntities
 		Type:       *fieldType,
 		JsonName:   findJSONName(field.FieldOptions),
 		JSONString: isJSONString(field.FieldOptions),
+		CustomType: isCustomType(field.FieldOptions),
 	}
 	if f.JSONString && (f.Type.Kind != schema.KindWrapper || f.Type.WrapperType != schema.WrapperStringValue) {
 		return nil, fmt.Errorf("expected %s type at %s for json_string, got %+v", schema.WrapperStringValue, f.Name, f.Type)
+	}
+	if f.CustomType && (f.Type.Kind != schema.KindPrimitive || f.Type.PrimitiveType != schema.TypeBytes) {
+		return nil, fmt.Errorf("expected %s type at %s for %s, got %+v", schema.TypeBytes, f.Name, optionCustomType, f.Type)
 	}
 	return f, nil
 }
@@ -413,6 +421,17 @@ func (r *Registry) processMapField(field *protoparserparser.MapField, resolvedEn
 func isJSONString(opts []*protoparserparser.FieldOption) bool {
 	for _, opt := range opts {
 		if opt.OptionName == "json_string" {
+			return true
+		}
+	}
+	return false
+}
+
+// isCustomType reports whether a field carries the gogoproto (gogoproto.customtype)
+// option. Such fields must be `bytes` on the wire and carry a JSON-encoded value.
+func isCustomType(opts []*protoparserparser.FieldOption) bool {
+	for _, opt := range opts {
+		if strings.TrimSpace(opt.OptionName) == optionCustomType {
 			return true
 		}
 	}

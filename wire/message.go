@@ -204,6 +204,13 @@ func (me *MessageEncoder) encodeFieldValue(value interface{}, field *schema.Fiel
 		b, _ := json.Marshal(value)
 		value = string(b)
 	}
+	if field.CustomType {
+		b, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("marshal %s value for field %s: %w", "(gogoproto.customtype)", field.Name, err)
+		}
+		value = b
+	}
 	switch field.Type.Kind {
 	case schema.KindPrimitive:
 		return me.encodePrimitiveField(value, field.Type.PrimitiveType)
@@ -287,6 +294,18 @@ func (me *MessageEncoder) encodeRepeatedField(value interface{}, field *schema.F
 			b, _ := json.Marshal(slice[i])
 			slice[i] = string(b)
 		}
+	}
+	if field.CustomType {
+		// Build a new slice to avoid mutating the caller's input.
+		marshaled := make([]interface{}, len(slice))
+		for i := 0; i < len(slice); i++ {
+			b, err := json.Marshal(slice[i])
+			if err != nil {
+				return fmt.Errorf("marshal %s element for field %s: %w", "(gogoproto.customtype)", field.Name, err)
+			}
+			marshaled[i] = b
+		}
+		slice = marshaled
 	}
 
 	var packed bool
