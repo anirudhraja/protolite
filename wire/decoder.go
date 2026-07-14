@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -299,7 +300,20 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 	fieldType := field.Type
 	switch fieldType.Kind {
 	case schema.KindPrimitive:
-		return d.decodePrimitive(field, wireType)
+		value, isPacked, err := d.decodePrimitive(field, wireType)
+		if err != nil {
+			return nil, false, err
+		}
+		// A bytes field annotated with json_bytes carries a
+		// JSON-encoded value on the wire; decode it back into a Go value.
+		if field.JSONBytes && !isPacked {
+			decoded, err := decodeJSONBytes(value)
+			if err != nil {
+				return nil, false, fmt.Errorf("field %s: %w", field.Name, err)
+			}
+			return decoded, false, nil
+		}
+		return value, isPacked, nil
 	case schema.KindMessage:
 		md := NewMessageDecoder(d)
 		value, err := md.DecodeMessage(fieldType.MessageType)
@@ -368,6 +382,26 @@ func (d *Decoder) DecodeTypedField(field *schema.Field, wireType WireType) (inte
 		value, err := d.decodeRawValue(wireType)
 		return value, false, err
 	}
+}
+
+// decodeJSONBytes interprets the raw bytes of a json_bytes field as a JSON
+// document and decodes it into a Go value. Numbers are preserved as
+// json.Number to match the rest of the library and avoid precision loss.
+func decodeJSONBytes(value interface{}) (interface{}, error) {
+	raw, ok := value.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("json_bytes field expected bytes, got %T", value)
+	}
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var out interface{}
+	if err := dec.Decode(&out); err != nil {
+		return nil, fmt.Errorf("unmarshal json_bytes json: %w", err)
+	}
+	return out, nil
 }
 
 // decodePrimitive decodes a primitive type using the appropriate decoder
