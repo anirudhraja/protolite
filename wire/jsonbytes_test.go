@@ -5,21 +5,21 @@ import (
 	"reflect"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
+	pb3 "github.com/anirudhraja/protolite/conformance_test/generated/google/protobuf"
 	"github.com/anirudhraja/protolite/schema"
 )
 
-// jsonBytesMessage returns a message with a single bytes field that is
-// annotated with json_bytes, i.e. it carries a JSON-encoded value
-// on the wire (the pattern used for @thrift GraphQL scalars).
-func jsonBytesMessage() *schema.Message {
+func scalarJSONBytesMessage() *schema.Message {
 	return &schema.Message{
-		Name: "ThriftScalarHolder",
+		Name: "TestAllTypesProto3",
 		Fields: []*schema.Field{
 			{
-				Name:       "session",
-				Number:     1,
-				Label:      schema.LabelOptional,
-				JSONBytes:  true,
+				Name:      "optional_bytes",
+				Number:    15,
+				Label:     schema.LabelOptional,
+				JSONBytes: true,
 				Type: schema.FieldType{
 					Kind:          schema.KindPrimitive,
 					PrimitiveType: schema.TypeBytes,
@@ -29,116 +29,148 @@ func jsonBytesMessage() *schema.Message {
 	}
 }
 
-func TestJSONBytes_RoundTrip(t *testing.T) {
-	msg := jsonBytesMessage()
+func repeatedJSONBytesMessage() *schema.Message {
+	return &schema.Message{
+		Name: "TestAllTypesProto3",
+		Fields: []*schema.Field{
+			{
+				Name:      "repeated_bytes",
+				Number:    45,
+				Label:     schema.LabelRepeated,
+				JSONBytes: true,
+				Type: schema.FieldType{
+					Kind:          schema.KindPrimitive,
+					PrimitiveType: schema.TypeBytes,
+				},
+			},
+		},
+	}
+}
 
+func TestJSONBytes_DecodeFromGeneratedCode(t *testing.T) {
 	session := map[string]interface{}{
 		"uuid":  "dummy-uuid-abc",
 		"state": "ACTIVE",
 		"id":    "dummy-order-123",
+		"nested": map[string]interface{}{
+			"k": "v",
+		},
 	}
-	data := map[string]interface{}{"session": session}
-
-	encoded, err := EncodeMessage(data, msg, nil)
+	raw, err := json.Marshal(session)
 	if err != nil {
-		t.Fatalf("encode: %v", err)
+		t.Fatal(err)
 	}
 
-	// The field must be length-delimited (wire type 2). This is what the
-	// gateway's protolite decoder previously choked on when the value was a
-	// nested wrapper message rather than a flat JSON-bytes scalar.
-	_, wireType := ParseTag(Tag(encoded[0]))
-	if wireType != WireBytes {
-		t.Fatalf("expected wire type %d (bytes), got %d", WireBytes, wireType)
-	}
-
-	decodedI, err := DecodeMessage(encoded, msg, nil)
+	wireBytes, err := proto.Marshal(&pb3.TestAllTypesProto3{OptionalBytes: raw})
 	if err != nil {
-		t.Fatalf("decode: %v", err)
+		t.Fatalf("proto.Marshal: %v", err)
+	}
+
+	decodedI, err := DecodeMessage(wireBytes, scalarJSONBytesMessage(), nil)
+	if err != nil {
+		t.Fatalf("protolite decode: %v", err)
 	}
 	decoded, ok := decodedI.(map[string]interface{})
 	if !ok {
 		t.Fatalf("decoded is %T, want map[string]interface{}", decodedI)
 	}
-
-	got, ok := decoded["session"].(map[string]interface{})
+	got, ok := decoded["optional_bytes"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("session decoded as %T, want map[string]interface{}", decoded["session"])
+		t.Fatalf("optional_bytes decoded as %T, want map[string]interface{}", decoded["optional_bytes"])
 	}
 	if !reflect.DeepEqual(got, session) {
-		t.Errorf("round-trip mismatch:\n got:  %#v\n want: %#v", got, session)
+		t.Errorf("mismatch:\n got:  %#v\n want: %#v", got, session)
 	}
 }
 
-// TestJSONBytes_DecodesRawJSONBytes mimics the real gateway scenario: a peer
-// service (mirror) emits a plain bytes field whose contents are json.Marshal of
-// the thrift model. Protolite must json.Unmarshal it back into a structured
-// value rather than surfacing the raw base64 bytes.
-func TestJSONBytes_DecodesRawJSONBytes(t *testing.T) {
-	msg := jsonBytesMessage()
+func TestJSONBytes_EncodeToGeneratedCode(t *testing.T) {
+	session := map[string]interface{}{
+		"uuid":  "dummy-uuid-abc",
+		"state": "ACTIVE",
+		"id":    "dummy-order-123",
+	}
+	data := map[string]interface{}{"optional_bytes": session}
 
-	payload := map[string]interface{}{"uuid": "abc", "nested": map[string]interface{}{"k": "v"}}
-	raw, err := json.Marshal(payload)
+	encoded, err := EncodeMessage(data, scalarJSONBytesMessage(), nil)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("protolite encode: %v", err)
 	}
 
-	// Hand-build the wire bytes: tag for field 1 (bytes) + length-delimited JSON.
-	enc := NewEncoder()
-	NewVarintEncoder(enc).EncodeVarint(uint64(MakeTag(1, WireBytes)))
-	NewBytesEncoder(enc).EncodeBytes(raw)
+	var m pb3.TestAllTypesProto3
+	if err := proto.Unmarshal(encoded, &m); err != nil {
+		t.Fatalf("proto.Unmarshal: %v", err)
+	}
+	if len(m.OptionalBytes) == 0 {
+		t.Fatal("generated OptionalBytes is empty")
+	}
 
-	decodedI, err := DecodeMessage(enc.Bytes(), msg, nil)
-	if err != nil {
-		t.Fatalf("decode: %v", err)
+	var got map[string]interface{}
+	if err := json.Unmarshal(m.OptionalBytes, &got); err != nil {
+		t.Fatalf("unmarshal generated payload: %v", err)
 	}
-	decoded := decodedI.(map[string]interface{})
-	got, ok := decoded["session"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("session decoded as %T, want map[string]interface{}", decoded["session"])
-	}
-	if !reflect.DeepEqual(got, payload) {
-		t.Errorf("mismatch:\n got:  %#v\n want: %#v", got, payload)
+	if !reflect.DeepEqual(got, session) {
+		t.Errorf("mismatch:\n got:  %#v\n want: %#v", got, session)
 	}
 }
 
-func TestJSONBytes_Repeated(t *testing.T) {
-	msg := &schema.Message{
-		Name: "RepeatedHolder",
-		Fields: []*schema.Field{
-			{
-				Name:       "sessions",
-				Number:     1,
-				Label:      schema.LabelRepeated,
-				JSONBytes:  true,
-				Type: schema.FieldType{
-					Kind:          schema.KindPrimitive,
-					PrimitiveType: schema.TypeBytes,
-				},
-			},
-		},
-	}
-
+func TestJSONBytes_RepeatedInteropBothDirections(t *testing.T) {
 	elems := []interface{}{
 		map[string]interface{}{"id": "a"},
 		map[string]interface{}{"id": "b"},
 	}
-	data := map[string]interface{}{"sessions": elems}
 
-	encoded, err := EncodeMessage(data, msg, nil)
-	if err != nil {
-		t.Fatalf("encode: %v", err)
-	}
-	decodedI, err := DecodeMessage(encoded, msg, nil)
-	if err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	decoded := decodedI.(map[string]interface{})
-	got, ok := decoded["sessions"].([]interface{})
-	if !ok {
-		t.Fatalf("sessions decoded as %T, want []interface{}", decoded["sessions"])
-	}
-	if !reflect.DeepEqual(got, elems) {
-		t.Errorf("mismatch:\n got:  %#v\n want: %#v", got, elems)
-	}
+	t.Run("generated_to_protolite", func(t *testing.T) {
+		raws := make([][]byte, len(elems))
+		for i, e := range elems {
+			b, err := json.Marshal(e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raws[i] = b
+		}
+
+		wireBytes, err := proto.Marshal(&pb3.TestAllTypesProto3{RepeatedBytes: raws})
+		if err != nil {
+			t.Fatalf("proto.Marshal: %v", err)
+		}
+
+		decodedI, err := DecodeMessage(wireBytes, repeatedJSONBytesMessage(), nil)
+		if err != nil {
+			t.Fatalf("protolite decode: %v", err)
+		}
+		decoded := decodedI.(map[string]interface{})
+		got, ok := decoded["repeated_bytes"].([]interface{})
+		if !ok {
+			t.Fatalf("repeated_bytes decoded as %T, want []interface{}", decoded["repeated_bytes"])
+		}
+		if !reflect.DeepEqual(got, elems) {
+			t.Errorf("mismatch:\n got:  %#v\n want: %#v", got, elems)
+		}
+	})
+
+	t.Run("protolite_to_generated", func(t *testing.T) {
+		encoded, err := EncodeMessage(map[string]interface{}{"repeated_bytes": elems}, repeatedJSONBytesMessage(), nil)
+		if err != nil {
+			t.Fatalf("protolite encode: %v", err)
+		}
+
+		var m pb3.TestAllTypesProto3
+		if err := proto.Unmarshal(encoded, &m); err != nil {
+			t.Fatalf("proto.Unmarshal: %v", err)
+		}
+		if len(m.RepeatedBytes) != len(elems) {
+			t.Fatalf("expected %d repeated_bytes, got %d", len(elems), len(m.RepeatedBytes))
+		}
+		got := make([]interface{}, len(m.RepeatedBytes))
+		for i, r := range m.RepeatedBytes {
+			var v interface{}
+			if err := json.Unmarshal(r, &v); err != nil {
+				t.Fatalf("unmarshal element %d: %v", i, err)
+			}
+			got[i] = v
+		}
+		if !reflect.DeepEqual(got, elems) {
+			t.Errorf("mismatch:\n got:  %#v\n want: %#v", got, elems)
+		}
+	})
 }

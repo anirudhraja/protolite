@@ -210,6 +210,16 @@ func getFullyQualifiedType(typeName string, allResolvedEntities map[string]struc
 	return "", fmt.Errorf("unbale to resolve full qualified prefixed with (.) type name: %s", typeName)
 }
 
+func getOptionName(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.Trim(name, `"`)
+	name = strings.NewReplacer("(", "", ")", "").Replace(name)
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		name = name[idx+1:]
+	}
+	return strings.TrimSpace(name)
+}
+
 func findJSONName(options []*protoparserparser.FieldOption) string {
 	for _, opt := range options {
 		if strings.Trim(opt.OptionName, `"`) == optionJSONNameKey {
