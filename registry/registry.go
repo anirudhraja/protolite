@@ -431,7 +431,7 @@ func isJSONString(opts []*protoparserparser.FieldOption) bool {
 // fields must be `bytes` on the wire and carry a JSON-encoded value.
 func isJSONBytes(opts []*protoparserparser.FieldOption) bool {
 	for _, opt := range opts {
-		if strings.TrimSpace(opt.OptionName) == optionJSONBytes {
+		if getOptionName(opt.OptionName) == optionJSONBytes {
 			return true
 		}
 	}

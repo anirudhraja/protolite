@@ -1235,6 +1235,55 @@ message Holder {
 	}
 }
 
+// TestJSONBytes_ParsedOnQualifiedExtension verifies that the option is
+// recognized when emitted as a fully-qualified custom extension, e.g.
+// `(uber.edge_gql.json_bytes)`. protoc requires this parenthesized form (the
+// bare name is rejected as an unknown option), and go-protoparser preserves the
+// parentheses/qualifier verbatim in OptionName, so protolite must normalize it.
+func TestJSONBytes_ParsedOnQualifiedExtension(t *testing.T) {
+	content := `syntax = "proto3";
+package test.jsonbytes;
+
+message Holder {
+  bytes session = 1 [(uber.edge_gql.json_bytes) = true];
+  string name = 2;
+}
+`
+	r, protoPath := loadProto(t, content)
+	file, err := os.Open(protoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := r.LoadSchema(file, protoPath); err != nil {
+		t.Fatalf("LoadSchema: %v", err)
+	}
+
+	msg, err := r.GetMessage("test.jsonbytes.Holder")
+	if err != nil {
+		t.Fatalf("GetMessage: %v", err)
+	}
+
+	var session, name bool
+	for _, f := range msg.Fields {
+		switch f.Name {
+		case "session":
+			session = true
+			if !f.JSONBytes {
+				t.Errorf("session field: JSONBytes = false, want true for qualified extension")
+			}
+		case "name":
+			name = true
+			if f.JSONBytes {
+				t.Errorf("name field: JSONBytes = true, want false")
+			}
+		}
+	}
+	if !session || !name {
+		t.Fatalf("expected to find both fields, got session=%v name=%v", session, name)
+	}
+}
+
 func TestJSONBytes_RejectedOnNonBytesField(t *testing.T) {
 	content := `syntax = "proto3";
 package test.jsonbytes;
